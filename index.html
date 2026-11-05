@@ -7,7 +7,56 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>QUANTA — Incremental Physics</title>
   <link rel="stylesheet" href="./src/styles/styles.css" />
-  <script type="module" src="./src/main.js"></script>
 </head>
-<body></body>
+<body>
+    <!-- Required by errorBootstrap.js -->
+    <div id="productionErrorLog"></div>
+
+    <!-- Mount point for embedded mode -->
+    <div id="devtools"></div>
+
+    <!-- Install error listeners before application startup -->
+    <script src="https://twaddler01.github.io/mobile-dev-console/releases/v1.0.1/errorBootstrap.js"></script>
+
+    <script type="module">
+        const debug = false;
+        
+        if (debug) {
+            try {
+                const { DevTools } = await import(
+                    "https://twaddler01.github.io/mobile-dev-console/releases/v1.0.1/DevTools.js"
+                );
+    
+                const devTools = DevTools.mount({
+                    mode: "embedded",
+                    mountPoint: "#devtools",
+                    height: "60dvh",
+                    captureConsole: true,
+                    mirrorToNative: false,
+                    showCopyButtons: false,
+                    allowDragOutsideBounds: true
+                });
+    
+                // Optional: expose the instance to application code.
+                window.devTools = devTools;
+    
+                // Initialize the application after DevTools.
+                await import("./src/main.js");
+            } catch (error) {
+                if (window.devConsole) {
+                    window.devConsole.error(error);
+                } else if (window.showFatalError) {
+                    window.showFatalError(
+                        "Application Startup Failed",
+                        error
+                    );
+                } else {
+                    console.error(error);
+                }
+            }
+        } else {
+            await import("./src/main.js");
+        }
+    </script>
+</body>
 </html>

@@ -8,10 +8,13 @@ import { clock } from "./clock.js";
 import { mountToast, toast as toastMsg } from "./toast.js";
 import { WaveScope } from "./waveScope.js";
 import { Features } from "./features.js";
+import { Save } from "./save.js";
 
 export const UI = (() => {
     const $ = sel => document.querySelector(sel);
     const refs = { up: {}, mod: {}, cUp: {}, feat: {}, milestones: [] };
+    const featureViews = {}; // id -> mounted view
+    let activeViewId = "observe";
     let lastFormulaSig = "";
     const NBSP = "\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0";
 
@@ -49,6 +52,10 @@ export const UI = (() => {
                 div({ className: "pill s" }, [
                     span({ className: "k" }, "SURGE"),
                     span({ className: "v", id: "surgeVal" }, "×1.00")
+                ]),
+                div({ className: "pill ex", id: "exchangePill" }, [
+                    span({ className: "k" }, "Ⓠ"),
+                    span({ className: "v", id: "exchangePillVal" }, "1.00")
                 ]),
                 div({ className: "pill e", id: "entropyPill" }, [
                     span({ className: "k" }, "Ξ"),
@@ -156,7 +163,6 @@ export const UI = (() => {
             span({ className: "wq-label" }, "WAVE QUALITY"),
             waveQuality
         ]);
-
         const collapseBtn = el(
             "button",
             { className: "collapse-btn", id: "collapseBtn" },
@@ -170,19 +176,16 @@ export const UI = (() => {
                 ])
             ]
         );
-
         const wavePanel = div({ className: "panel" }, [
             div({ className: "panel-title" }, "Coherence Wave"),
             waveWrap,
             readout,
             collapseBtn
         ]);
-
         const phasePanel = div({ className: "panel" }, [
             div({ className: "panel-title" }, "Phase Upgrades"),
             div({ className: "list", id: "phaseList" })
         ]);
-
         const hint = div(
             { className: "hint" },
             "Coherence yield = base × (0.1 + 0.9 × wave). Time your collapses into the peaks. Stabilizers raise the wave floor, so troughs hurt less."
@@ -249,27 +252,50 @@ export const UI = (() => {
     }
 
     function buildViews() {
-        return el("main", { id: "views" }, [
+        const base = [
             buildObserveView(),
             buildUpgradesView(),
             buildCoherenceView(),
             buildModifiersView(),
             buildEntropyView()
-        ]);
+        ];
+
+        /* feature views */
+        const featureEls = [];
+        for (const f of Features.all()) {
+            for (const v of f.views || []) {
+                const mounted = v.mount({ UI: api, Save });
+                featureViews[v.id] = mounted;
+                featureEls.push(mounted.element);
+            }
+        }
+
+        return el("main", { id: "views" }, [...base, ...featureEls]);
     }
 
     function buildTabs() {
-        const tabs = [
+        const base = [
             ["observe", "◉", "OBSERVE"],
             ["upgrades", "⚙", "UPGRADES"],
             ["coherence", "∿", "COHERENCE"],
             ["modifiers", "Ψ", "MODIFIERS"],
             ["entropy", "Ξ", "ENTROPY"]
         ];
-        return el(
-            "nav",
-            { id: "tabs" },
-            tabs.map(([key, icon, label], i) =>
+        const featureTabs = [];
+        for (const f of Features.all()) {
+            for (const v of f.views || []) {
+                featureTabs.push({
+                    key: v.id,
+                    icon: v.icon,
+                    label: v.label,
+                    featureId: f.id
+                });
+            }
+        }
+
+        const tabs = [];
+        base.forEach(([key, icon, label], i) => {
+            tabs.push(
                 el(
                     "button",
                     {
@@ -281,12 +307,66 @@ export const UI = (() => {
                     },
                     [span({ className: "ic" }, icon), span({}, label)]
                 )
-            )
-        );
+            );
+        });
+        featureTabs.forEach(t => {
+            tabs.push(
+                el(
+                    "button",
+                    {
+                        className: "tab",
+                        dataset: { tab: t.key, feature: t.featureId }
+                    },
+                    [span({ className: "ic" }, t.icon), span({}, t.label)]
+                )
+            );
+        });
+
+        const inner = el("div", { id: "tabs" }, tabs);
+        const fadeL = el("div", {
+            className: "nav-fade left",
+            id: "tabFadeLeft"
+        });
+        const fadeR = el("div", {
+            className: "nav-fade right",
+            id: "tabFadeRight"
+        });
+
+        return el("div", { id: "tabs-wrap" }, [fadeL, fadeR, inner]);
     }
 
     function buildToastNode() {
         return div({ id: "toast" });
+    }
+
+    /* ================= Tab scrolling ================= */
+
+    function updateTabScrollState() {
+        const tabs = document.getElementById("tabs");
+        const fadeL = document.getElementById("tabFadeLeft");
+        const fadeR = document.getElementById("tabFadeRight");
+        if (!tabs || !fadeL || !fadeR) return;
+
+        const overflowing = tabs.scrollWidth > tabs.clientWidth + 1;
+        const atStart = tabs.scrollLeft <= 2;
+        const atEnd =
+            tabs.scrollLeft + tabs.clientWidth >= tabs.scrollWidth - 2;
+
+        tabs.classList.toggle("fits", !overflowing);
+        fadeL.classList.toggle("visible", overflowing && !atStart);
+        fadeR.classList.toggle("visible", overflowing && !atEnd);
+    }
+
+    function centerTab(tab) {
+        const tabs = document.getElementById("tabs");
+        if (!tabs || !tab) return;
+        const tabsRect = tabs.getBoundingClientRect();
+        const tabRect = tab.getBoundingClientRect();
+        const target =
+            tabs.scrollLeft +
+            (tabRect.left - tabsRect.left) -
+            (tabsRect.width - tabRect.width) / 2;
+        tabs.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
     }
 
     /* ================= Cards ================= */
@@ -347,10 +427,8 @@ export const UI = (() => {
 
     function buildFeatureCards() {
         const list = $("#upgradeList");
-        /* Remove any feature cards already present (rebuild-safe) */
         list.querySelectorAll(".card[data-feature]").forEach(n => n.remove());
         refs.feat = {};
-
         for (const f of Features.all()) {
             for (const def of f.cards || []) {
                 makeCard(list, {
@@ -391,11 +469,18 @@ export const UI = (() => {
         buildFeatureCards();
         refreshEntropyVisibility();
 
-        /* Re-render feature cards when the registry changes */
+        /* Re-render feature cards on registry change (views need a reload). */
         Features.onChange(() => {
             buildFeatureCards();
             render();
         });
+
+        /* Initial fade/overflow check — after layout, and again after
+           fonts settle (which can change tab widths). */
+        requestAnimationFrame(updateTabScrollState);
+        if (document.fonts?.ready) {
+            document.fonts.ready.then(updateTabScrollState);
+        }
     }
 
     /* ================= Feedback ================= */
@@ -434,6 +519,8 @@ export const UI = (() => {
             .querySelector('.tab[data-tab="entropy"]')
             ?.classList.toggle("revealed", unlocked);
         $("#entropyPill")?.classList.toggle("revealed", unlocked);
+        /* Entropy tab reveal changes tab count → may change overflow. */
+        updateTabScrollState();
     }
 
     function renderEntropy() {
@@ -455,7 +542,6 @@ export const UI = (() => {
     function renderCards() {
         const s = State.get();
 
-        /* Regular upgrades */
         for (const def of Config.UPGRADES) {
             const r = refs.up[def.id];
             const lv = s.up[def.id] || 0;
@@ -491,7 +577,6 @@ export const UI = (() => {
             r.el.classList.toggle("can", s.coherence >= cost);
             r.el.classList.toggle("poor", s.coherence < cost);
         }
-        /* Feature upgrades — same treatment, routed by currency */
         for (const [id, r] of Object.entries(refs.feat)) {
             const lv = s.feat[id] || 0;
             const cost = r.def.cost(lv);
@@ -509,10 +594,8 @@ export const UI = (() => {
         const entUnlocked = Calc.entropyUnlocked();
         const entMult = Calc.entropyMult();
         const entInt = entUnlocked ? Math.round(s.entropy || 0) : 0;
-
         const tapCtx = { tapGain: Calc.tapGain() };
 
-        /* tap channel */
         const tT = ["(1+" + s.up.observer + ")"],
             tV = [1 + s.up.observer];
         for (const m of Config.MODIFIERS) {
@@ -540,7 +623,6 @@ export const UI = (() => {
         const tCap = Calc.softcapThreshold("tap");
         const tFin = Calc.softcap(tRaw, "tap");
 
-        /* auto channel */
         const aT = ["1.0", String(s.up.collector)],
             aV = [1.0, s.up.collector];
         for (const m of Config.MODIFIERS) {
@@ -570,7 +652,6 @@ export const UI = (() => {
 
         const surgeQ = Math.round((s.surge || 0) * 10) / 10;
 
-        /* Feature formula lines */
         const featLines = [];
         for (const f of Features.all()) {
             if (!f.formula) continue;
@@ -590,8 +671,8 @@ export const UI = (() => {
             surgeQ,
             entInt,
             entUnlocked ? 1 : 0,
-            s.feat?.tickRate || 0,
-            s.feat?.collapseEcho || 0,
+            s.feat.tickRate,
+            s.feat.collapseEcho,
             featLines.map(l => l.text).join("¦")
         ].join("|");
         if (sig === lastFormulaSig) return;
@@ -608,7 +689,7 @@ export const UI = (() => {
             ),
             div({ className: "f-res" }, NBSP + "= " + Format.num(tFin))
         ];
-        if (tRaw > tCap) {
+        if (tRaw > tCap)
             children.push(
                 div(
                     { className: "f-cap" },
@@ -620,7 +701,6 @@ export const UI = (() => {
                         Format.num(tFin)
                 )
             );
-        }
         children.push(div({ className: "f-sep" }));
         children.push(
             div({}, [
@@ -631,7 +711,7 @@ export const UI = (() => {
         children.push(
             div({ className: "f-res" }, NBSP + "= " + Format.num(aFin) + " /s")
         );
-        if (aRaw > aCap) {
+        if (aRaw > aCap)
             children.push(
                 div(
                     { className: "f-cap" },
@@ -643,7 +723,6 @@ export const UI = (() => {
                         Format.num(aFin)
                 )
             );
-        }
         if ((s.surge || 0) > 0.01) {
             const m = Calc.surgeMult();
             children.push(
@@ -670,14 +749,14 @@ export const UI = (() => {
                 div(
                     {
                         className:
-                            "f-feature" + (line.accent === "coh" ? " coh" : ""),
+                            "f-feature" +
+                            (line.accent ? " " + line.accent : ""),
                         style: { marginTop: "6px" }
                     },
                     line.text
                 )
             );
         }
-
         $("#formula").replaceChildren(...children);
     }
 
@@ -685,7 +764,6 @@ export const UI = (() => {
         const s = State.get();
         const mult = Calc.surgeMult();
         const pool = s.surge || 0;
-
         const surgeValEl = $("#surgeVal");
         if (!surgeValEl) return;
 
@@ -714,6 +792,20 @@ export const UI = (() => {
 
         renderSurge();
         renderEntropy();
+
+        /* exchange pill */
+        const exFeature = Features.get("exchange");
+        if (exFeature && exFeature.price && s.market?.everVisited) {
+            const pill = document.getElementById("exchangePill");
+            if (pill) {
+                pill.classList.add("revealed");
+                const v = pill.querySelector(".v");
+                if (v)
+                    v.textContent = Format.plain(
+                        exFeature.price(Date.now() / 1000)
+                    );
+            }
+        }
 
         const q = Wave.quality(t);
         const wq = $("#waveQuality");
@@ -745,29 +837,56 @@ export const UI = (() => {
         renderCards();
         renderFormula();
         renderStats();
+        featureViews[activeViewId]?.render?.();
+    }
+
+    /* ================= Tab switching ================= */
+
+    function switchToTab(name) {
+        if (name === activeViewId) return;
+
+        document
+            .querySelectorAll(".tab")
+            .forEach(t => t.classList.toggle("active", t.dataset.tab === name));
+        document
+            .querySelectorAll(".view")
+            .forEach(v =>
+                v.classList.toggle("active", v.dataset.view === name)
+            );
+        document.getElementById("views").scrollTop = 0;
+
+        WaveScope.setVisible(name === "coherence");
+        featureViews[activeViewId]?.onHide?.();
+        activeViewId = name;
+        featureViews[activeViewId]?.onShow?.();
+
+        const activeTab = document.querySelector(`.tab[data-tab="${name}"]`);
+        if (activeTab) centerTab(activeTab);
+        /* Wait a frame so the smooth scroll has started before we measure. */
+        requestAnimationFrame(updateTabScrollState);
+
+        render();
     }
 
     function wireShell() {
-        document.querySelectorAll(".tab").forEach(tab => {
-            on(tab, "click", () => {
-                document
-                    .querySelectorAll(".tab")
-                    .forEach(t => t.classList.toggle("active", t === tab));
-                const name = tab.dataset.tab;
-                document
-                    .querySelectorAll(".view")
-                    .forEach(v =>
-                        v.classList.toggle("active", v.dataset.view === name)
-                    );
-                document.getElementById("views").scrollTop = 0;
-                WaveScope.setVisible(name === "coherence");
-                render();
-            });
+        on($("#tabs"), "click", e => {
+            const tab = e.target.closest(".tab");
+            if (!tab) return;
+            switchToTab(tab.dataset.tab);
         });
         on($("#resetBtn"), "click", () => actions.reset());
+
+        const tabsEl = document.getElementById("tabs");
+        if (tabsEl) {
+            on(tabsEl, "scroll", updateTabScrollState, { passive: true });
+        }
+        on(window, "resize", updateTabScrollState);
+        on(window, "orientationchange", () =>
+            setTimeout(updateTabScrollState, 120)
+        );
     }
 
-    return {
+    const api = {
         build,
         wireShell,
         setActions,
@@ -778,4 +897,5 @@ export const UI = (() => {
         toast,
         refs
     };
+    return api;
 })();

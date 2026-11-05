@@ -15,7 +15,8 @@ export const State = (() => {
             up: { observer: 0, collector: 0, resonance: 0, buffer: 0 },
             mod: { psi: 0, phi: 0, lam: 0 },
             cUp: { stab: 0, harm: 0, lock: 0 },
-            feat: { tickRate: 0, collapseEcho: 0 }
+            feat: { tickRate: 0, collapseEcho: 0, exchange: 0 },
+            market: { credits: 0, everVisited: false }
         };
     }
     let s = blank();

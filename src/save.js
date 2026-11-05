@@ -50,7 +50,11 @@ export const Save = (() => {
             mod: Object.assign({}, def.mod, parsed.mod || {}),
             cUp: Object.assign({}, def.cUp, parsed.cUp || {}),
             feat: Object.assign({}, def.feat, parsed.feat || {}),
-            _tickAcc: num(parsed._tickAcc) // preserves partial tick on reload
+            market: {
+                credits: clampInt(parsed.market?.credits ?? 0),
+                everVisited: !!parsed.market?.everVisited
+            },
+            _tickAcc: num(parsed._tickAcc)
         };
         for (const k in merged.up) merged.up[k] = clampInt(merged.up[k]);
         for (const k in merged.mod) merged.mod[k] = clampInt(merged.mod[k]);

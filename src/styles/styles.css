@@ -768,22 +768,44 @@ body {
 }
 
 /* ============ Tabs ============ */
-#tabs {
+#tabs-wrap {
     flex: 0 0 auto;
-    display: flex;
+    position: relative;
     border-top: 1px solid var(--line);
     background: rgba(9, 13, 25, 0.96);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     padding-bottom: env(safe-area-inset-bottom);
 }
+
+#tabs {
+    display: flex;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    -webkit-overflow-scrolling: touch;
+    padding: 0 4px;
+    justify-content: flex-start;
+    overscroll-behavior-x: contain;
+}
+#tabs::-webkit-scrollbar {
+    display: none;
+}
+/* When all tabs fit, center them and drop the gutter. */
+#tabs.fits {
+    justify-content: center;
+    padding: 0;
+}
+
 .tab {
-    flex: 1;
+    flex: 0 0 auto;
+    min-width: 76px;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 3px;
-    padding: 9px 0 8px;
+    padding: 10px 12px 9px;
     border: 0;
     background: none;
     color: var(--dim);
@@ -792,6 +814,7 @@ body {
     letter-spacing: 0.08em;
     cursor: pointer;
     transition: color 0.15s;
+    white-space: nowrap;
 }
 .tab .ic {
     font-size: 17px;
@@ -812,6 +835,56 @@ body {
 .tab.entropy-tab.active {
     color: var(--entropy);
     text-shadow: 0 0 14px rgba(249, 115, 22, 0.75);
+}
+
+/* Scroll-edge fades + chevrons — only visible while there is overflow
+   on that side. */
+.nav-fade {
+    position: absolute;
+    top: 0;
+    bottom: env(safe-area-inset-bottom);
+    width: 32px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+    z-index: 2;
+}
+.nav-fade.left {
+    left: 0;
+    background: linear-gradient(
+        to right,
+        rgba(9, 13, 25, 0.98) 30%,
+        rgba(9, 13, 25, 0) 100%
+    );
+}
+.nav-fade.right {
+    right: 0;
+    background: linear-gradient(
+        to left,
+        rgba(9, 13, 25, 0.98) 30%,
+        rgba(9, 13, 25, 0) 100%
+    );
+}
+.nav-fade::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    width: 7px;
+    height: 7px;
+    border-style: solid;
+    border-color: rgba(63, 233, 255, 0.55);
+    border-width: 0 1.5px 1.5px 0;
+}
+.nav-fade.left::after {
+    left: 10px;
+    transform: translateY(-50%) rotate(135deg);
+}
+.nav-fade.right::after {
+    right: 10px;
+    transform: translateY(-50%) rotate(-45deg);
+}
+.nav-fade.visible {
+    opacity: 1;
 }
 
 /* ============ Toast ============ */
@@ -850,4 +923,144 @@ body {
 }
 .f-feature.coh {
     color: var(--coh);
+}
+
+/* ============ Market ============ */
+:root {
+    --market: #4ade80;
+}
+
+.exchange-panel {
+    border-color: rgba(74, 222, 128, 0.28);
+}
+
+.exchange-chart-wrap {
+    position: relative;
+}
+#marketCanvas {
+    display: block;
+    width: 100%;
+    height: 120px;
+    border-radius: 10px;
+    background:
+        radial-gradient(
+            120% 140% at 50% 130%,
+            rgba(74, 222, 128, 0.1),
+            transparent 70%
+        ),
+        #070c18;
+    border: 1px solid var(--line);
+}
+
+.exchange-readout {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-top: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px dashed rgba(29, 41, 66, 0.7);
+}
+.exchange-price {
+    font-family: var(--mono);
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--market);
+    text-shadow: 0 0 16px rgba(74, 222, 128, 0.55);
+}
+.exchange-holdings {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--txt);
+}
+
+.exchange-buttons {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.exchange-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+.exchange-btn {
+    padding: 10px 8px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: linear-gradient(180deg, #142033, #0b1220);
+    color: var(--txt);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    text-align: center;
+    transition:
+        transform 0.07s,
+        border-color 0.15s,
+        box-shadow 0.15s;
+    touch-action: manipulation;
+}
+.exchange-btn:active {
+    transform: scale(0.985);
+}
+.exchange-btn .amount {
+    display: block;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--dim);
+    margin-top: 3px;
+    letter-spacing: 0;
+}
+.exchange-btn.buy {
+    border-color: rgba(74, 222, 128, 0.4);
+}
+.exchange-btn.buy.can {
+    border-color: rgba(74, 222, 128, 0.8);
+    box-shadow: 0 0 16px rgba(74, 222, 128, 0.2);
+}
+.exchange-btn.buy.can .amount {
+    color: var(--market);
+}
+.exchange-btn.sell {
+    border-color: rgba(255, 209, 102, 0.4);
+}
+.exchange-btn.sell.can {
+    border-color: rgba(255, 209, 102, 0.8);
+    box-shadow: 0 0 16px rgba(255, 209, 102, 0.2);
+}
+.exchange-btn.sell.can .amount {
+    color: var(--cost);
+}
+.exchange-btn.poor {
+    opacity: 0.4;
+}
+
+/* exchange pill in the HUD — hidden until first market visit */
+.pill.ex {
+    display: none;
+    background: rgba(74, 222, 128, 0.08);
+    border-color: rgba(74, 222, 128, 0.28);
+}
+.pill.ex.revealed {
+    display: flex;
+}
+.pill.ex .v {
+    color: var(--market);
+}
+
+/* floater colors used by the exchange */
+.floater.market {
+    color: var(--market);
+}
+.floater.gold {
+    color: var(--cost);
+}
+
+/* feature accent support in the formula panel */
+.f-feature.market {
+    color: var(--market);
 }

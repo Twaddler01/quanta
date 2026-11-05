@@ -33,7 +33,7 @@ Save.read();
 /* 6. Start loop. */
 Game.boot();
 
-/* 7. Dev console helpers — remove this block in production if you like. */
+/* 7. Dev console helpers */
 window.QUANTA = {
     Features,
     Config,
@@ -59,9 +59,23 @@ window.QUANTA = {
         for (const k in s.feat) s.feat[k] = n;
         UI.render();
     },
-    /** Turn a feature on/off at runtime, no reload. */
+    /** Turn a feature on/off at runtime, no reload for cards/hooks. */
     toggle(id) {
         if (Features.has(id)) Features.unregister(id);
         else Features.register(Config.FEATURES[id]);
+        /* Note: feature views/tabs need a reload to appear/disappear. */
+    },
+    /** Convenience: current exchange price at time t (default: now). */
+    price(t) {
+        return Config.FEATURES.exchange.price(t ?? Date.now() / 1000);
+    },
+    /** Simulate market: give 1M Q, buy max, wait for peak, sell all. */
+    marketTest() {
+        const s = State.get();
+        s.quanta += 1_000_000;
+        s.total += 1_000_000;
+        s.feat.exchange = 5; // 60 credits capacity
+        Config.FEATURES.exchange.buy(9999); // buy max
+        UI.toast("Bought " + s.market.credits + " credits");
     }
 };
