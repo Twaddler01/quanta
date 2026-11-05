@@ -599,3 +599,43 @@ body {
     opacity: 1;
     transform: translate(-50%, 0);
 }
+
+/* ================= SURGE PANEL ================= */
+.surge-panel{ border-color:rgba(255,62,165,.28); }
+.surge-panel.active{
+  border-color:rgba(255,62,165,.6);
+  animation:surgeGlow 2s ease-in-out infinite;
+}
+@keyframes surgeGlow{
+  0%,100%{ box-shadow:0 0 14px rgba(255,62,165,.10); }
+  50%    { box-shadow:0 0 28px rgba(255,62,165,.30); }
+}
+.surge-title-row{
+  display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px;
+}
+.surge-mult{
+  font-family:var(--mono); font-size:16px; font-weight:700;
+  color:var(--mag); text-shadow:0 0 12px rgba(255,62,165,.6);
+}
+.consume-btn{
+  width:100%; padding:11px 14px; border-radius:12px;
+  border:1px solid rgba(255,62,165,.5);
+  background:linear-gradient(180deg, rgba(255,62,165,.18), rgba(255,62,165,.04));
+  color:#fff; font-family:inherit; cursor:pointer;
+  display:flex; justify-content:space-between; align-items:center; gap:10px;
+  touch-action:manipulation;
+  transition:transform .07s, border-color .15s, box-shadow .15s;
+}
+.consume-btn:active{ transform:scale(.985); }
+.consume-btn.poor{ opacity:.42; }
+.consume-label{ font-size:13px; font-weight:700; letter-spacing:.12em; }
+.consume-label b{ font-family:var(--mono); color:var(--gold); font-weight:700; }
+.consume-gain{
+  font-family:var(--mono); font-size:13px; font-weight:700;
+  color:var(--mag); text-shadow:0 0 10px rgba(255,62,165,.6);
+}
+.surge-meta{
+  margin-top:8px; font-size:10px; color:#5f6d92;
+  display:flex; justify-content:space-between;
+}
+.surge-meta b{ font-family:var(--mono); color:#9aa9cc; }
