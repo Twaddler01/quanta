@@ -1,12 +1,17 @@
 :root {
-    --panel: #101728;
-    --line: #1d2942;
+    --quanta: #3fe9ff;
+    --coh: #a78bfa;
+    --surge: #ff3ea5;
+    --entropy: #f97316; /* NEW — disorder */
+    --cost: #ffd166;
+    --good: #4dffa6;
+
     --txt: #e2e9fb;
     --dim: #7f8db3;
-    --cyan: #3fe9ff;
-    --mag: #ff3ea5;
-    --gold: #ffd166;
-    --grn: #4dffa6;
+    --dim2: #5f6d92;
+    --line: #1d2942;
+    --panel: #101728;
+
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
@@ -43,7 +48,7 @@ body {
     padding-top: env(safe-area-inset-top);
 }
 
-/* ================= HUD ================= */
+/* ============ HUD ============ */
 #hud {
     flex: 0 0 auto;
     padding: 10px 14px 12px;
@@ -79,6 +84,7 @@ body {
     margin-top: 9px;
     flex-wrap: wrap;
 }
+
 .pill {
     display: flex;
     align-items: baseline;
@@ -86,15 +92,8 @@ body {
     padding: 4px 11px;
     border-radius: 999px;
     font-size: 11px;
-    background: rgba(63, 233, 255, 0.07);
-    border: 1px solid rgba(63, 233, 255, 0.18);
-}
-.pill.c {
-    background: rgba(255, 62, 165, 0.07);
-    border-color: rgba(255, 62, 165, 0.22);
-}
-.pill.c .v {
-    color: var(--mag);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--line);
 }
 .pill .k {
     font-size: 9px;
@@ -104,10 +103,45 @@ body {
 .pill .v {
     font-family: var(--mono);
     font-weight: 600;
-    color: var(--cyan);
+    color: var(--txt);
 }
 
-/* ================= VIEWS ================= */
+.pill.q {
+    background: rgba(63, 233, 255, 0.07);
+    border-color: rgba(63, 233, 255, 0.22);
+}
+.pill.q .v {
+    color: var(--quanta);
+}
+.pill.c {
+    background: rgba(167, 139, 250, 0.07);
+    border-color: rgba(167, 139, 250, 0.24);
+}
+.pill.c .v {
+    color: var(--coh);
+}
+.pill.s {
+    background: rgba(255, 62, 165, 0.07);
+    border-color: rgba(255, 62, 165, 0.24);
+}
+.pill.s .v {
+    color: var(--surge);
+}
+
+/* entropy pill — hidden until unlocked */
+.pill.e {
+    display: none;
+    background: rgba(249, 115, 22, 0.08);
+    border-color: rgba(249, 115, 22, 0.28);
+}
+.pill.e.revealed {
+    display: flex;
+}
+.pill.e .v {
+    color: var(--entropy);
+}
+
+/* ============ Views ============ */
 #views {
     flex: 1 1 auto;
     min-height: 0;
@@ -134,7 +168,7 @@ body {
     }
 }
 
-/* ================= TAP ================= */
+/* ============ Tap ============ */
 .tapWrap {
     position: relative;
     display: flex;
@@ -207,8 +241,8 @@ body {
 .tap-glyph {
     font-size: 34px;
     line-height: 1;
-    color: var(--cyan);
-    text-shadow: 0 0 18px var(--cyan);
+    color: var(--quanta);
+    text-shadow: 0 0 18px var(--quanta);
 }
 .tap-text {
     font-size: 10px;
@@ -229,14 +263,17 @@ body {
     font-family: var(--mono);
     font-size: 15px;
     font-weight: 700;
-    color: var(--cyan);
+    color: var(--quanta);
     text-shadow: 0 0 14px currentColor;
     pointer-events: none;
     white-space: nowrap;
     animation: floatUp 0.95s ease-out forwards;
 }
-.floater.c {
-    color: var(--mag);
+.floater.coh {
+    color: var(--coh);
+}
+.floater.surge {
+    color: var(--surge);
 }
 @keyframes floatUp {
     0% {
@@ -252,7 +289,7 @@ body {
     }
 }
 
-/* ================= PANELS ================= */
+/* ============ Panels ============ */
 .panel {
     margin-top: 12px;
     padding: 11px 13px;
@@ -271,6 +308,7 @@ body {
     margin-bottom: 8px;
     text-transform: uppercase;
 }
+
 .formula {
     font-family: var(--mono);
     font-size: 11.5px;
@@ -281,19 +319,36 @@ body {
     padding-bottom: 2px;
 }
 .f-k {
-    color: var(--mag);
+    color: var(--quanta);
     font-weight: 700;
+}
+.f-k.surge {
+    color: var(--surge);
+}
+.f-k.coh {
+    color: var(--coh);
+}
+.f-k.ent {
+    color: var(--entropy);
 }
 .f-dim {
     color: #6f7ea5;
 }
 .f-res {
-    color: var(--cyan);
+    color: var(--quanta);
     font-weight: 700;
     font-size: 13px;
 }
 .f-cap {
-    color: var(--gold);
+    color: var(--cost);
+    font-weight: 700;
+}
+.f-surge {
+    color: var(--surge);
+    font-weight: 700;
+}
+.f-entropy {
+    color: var(--entropy);
     font-weight: 700;
 }
 .f-sep {
@@ -320,7 +375,7 @@ body {
     font-weight: 600;
 }
 
-/* ================= CARDS ================= */
+/* ============ Cards ============ */
 .list {
     display: flex;
     flex-direction: column;
@@ -374,8 +429,8 @@ body {
     font-weight: 650;
 }
 .card-name .sym {
-    color: var(--mag);
-    text-shadow: 0 0 12px rgba(255, 62, 165, 0.8);
+    color: var(--quanta);
+    text-shadow: 0 0 12px rgba(63, 233, 255, 0.7);
 }
 .card-lv {
     font-family: var(--mono);
@@ -394,30 +449,38 @@ body {
     margin-top: 6px;
     font-family: var(--mono);
     font-size: 11.5px;
-    color: var(--cyan);
+    color: var(--quanta);
 }
 .card-cost {
     margin-top: 8px;
     font-family: var(--mono);
     font-size: 13px;
     font-weight: 700;
-    color: var(--gold);
+    color: var(--cost);
 }
 .card.poor .card-cost {
     color: #8a6a2a;
 }
-.card.mag.can {
-    border-color: rgba(255, 62, 165, 0.5);
-    box-shadow: 0 0 20px rgba(255, 62, 165, 0.14);
+
+.card.coh.can {
+    border-color: rgba(167, 139, 250, 0.5);
+    box-shadow: 0 0 20px rgba(167, 139, 250, 0.15);
 }
-.card.mag .card-effect {
-    color: var(--mag);
+.card.coh .card-name .sym {
+    color: var(--coh);
+    text-shadow: 0 0 12px rgba(167, 139, 250, 0.7);
 }
-.card.mag .card-cost {
-    color: var(--mag);
+.card.coh .card-effect {
+    color: var(--coh);
+}
+.card.coh .card-cost {
+    color: var(--coh);
+}
+.card.coh.poor .card-cost {
+    color: #5d4a8c;
 }
 
-/* ================= WAVE ================= */
+/* ============ Coherence panel ============ */
 .wave-wrap {
     position: relative;
 }
@@ -429,7 +492,7 @@ body {
     background:
         radial-gradient(
             120% 140% at 50% 130%,
-            rgba(63, 233, 255, 0.09),
+            rgba(167, 139, 250, 0.1),
             transparent 70%
         ),
         #070c18;
@@ -450,10 +513,10 @@ body {
     font-family: var(--mono);
     font-size: 16px;
     font-weight: 700;
-    color: var(--cyan);
+    color: var(--coh);
 }
 .wq-val.hot {
-    color: var(--grn);
+    color: var(--good);
     text-shadow: 0 0 14px rgba(77, 255, 166, 0.8);
 }
 
@@ -462,11 +525,11 @@ body {
     margin-top: 12px;
     padding: 11px 14px 12px;
     border-radius: 14px;
-    border: 1px solid rgba(63, 233, 255, 0.35);
+    border: 1px solid rgba(167, 139, 250, 0.4);
     background: linear-gradient(
         180deg,
-        rgba(63, 233, 255, 0.15),
-        rgba(63, 233, 255, 0.03)
+        rgba(167, 139, 250, 0.16),
+        rgba(167, 139, 250, 0.03)
     );
     color: #fff;
     font-family: inherit;
@@ -501,7 +564,7 @@ body {
     font-family: var(--mono);
     font-size: 15px;
     font-weight: 700;
-    color: var(--mag);
+    color: var(--coh);
     grid-column: 2;
     grid-row: 1;
 }
@@ -509,15 +572,181 @@ body {
     grid-column: 1/-1;
     font-family: var(--mono);
     font-size: 11px;
-    color: var(--gold);
+    color: var(--cost);
     margin-top: 2px;
 }
 
+/* ============ Surge panel ============ */
+.surge-panel {
+    border-color: rgba(255, 62, 165, 0.28);
+}
+.surge-panel.active {
+    border-color: rgba(255, 62, 165, 0.6);
+    animation: surgeGlow 2s ease-in-out infinite;
+}
+@keyframes surgeGlow {
+    0%,
+    100% {
+        box-shadow: 0 0 14px rgba(255, 62, 165, 0.1);
+    }
+    50% {
+        box-shadow: 0 0 28px rgba(255, 62, 165, 0.3);
+    }
+}
+.surge-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8px;
+}
+.surge-mult {
+    font-family: var(--mono);
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--surge);
+    text-shadow: 0 0 12px rgba(255, 62, 165, 0.6);
+}
+.consume-btn {
+    width: 100%;
+    padding: 11px 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 62, 165, 0.5);
+    background: linear-gradient(
+        180deg,
+        rgba(255, 62, 165, 0.18),
+        rgba(255, 62, 165, 0.04)
+    );
+    color: #fff;
+    font-family: inherit;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    touch-action: manipulation;
+    transition:
+        transform 0.07s,
+        border-color 0.15s,
+        box-shadow 0.15s;
+}
+.consume-btn:active {
+    transform: scale(0.985);
+}
+.consume-btn.poor {
+    opacity: 0.42;
+}
+.consume-label {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+}
+.consume-label b {
+    font-family: var(--mono);
+    color: var(--cost);
+    font-weight: 700;
+}
+.consume-gain {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--surge);
+    text-shadow: 0 0 10px rgba(255, 62, 165, 0.6);
+}
+.surge-meta {
+    margin-top: 8px;
+    font-size: 10px;
+    color: var(--dim2);
+    display: flex;
+    justify-content: space-between;
+}
+.surge-meta b {
+    font-family: var(--mono);
+    color: #9aa9cc;
+}
+
+/* ============ Entropy panel ============ */
+.entropy-panel {
+    border-color: rgba(249, 115, 22, 0.28);
+}
+.entropy-headline {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 6px;
+}
+.entropy-val {
+    font-family: var(--mono);
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--entropy);
+    text-shadow: 0 0 16px rgba(249, 115, 22, 0.55);
+}
+.entropy-sym {
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    color: var(--dim);
+    margin-left: 4px;
+}
+.entropy-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 6px;
+    font-family: var(--mono);
+    font-size: 11px;
+}
+.entropy-meta .k {
+    color: var(--dim);
+}
+.entropy-meta .v {
+    color: var(--entropy);
+    font-weight: 700;
+}
+
+.milestone {
+    display: grid;
+    grid-template-columns: 22px 1fr auto;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 2px;
+    border-bottom: 1px dashed rgba(29, 41, 66, 0.7);
+    font-size: 12px;
+}
+.milestone:last-child {
+    border-bottom: 0;
+}
+.milestone .dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(249, 115, 22, 0.35);
+    background: transparent;
+}
+.milestone.done .dot {
+    background: var(--entropy);
+    box-shadow: 0 0 10px rgba(249, 115, 22, 0.7);
+}
+.milestone .label {
+    color: var(--dim);
+}
+.milestone.done .label {
+    color: var(--txt);
+}
+.milestone .at {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--dim2);
+}
+.milestone.done .at {
+    color: var(--entropy);
+}
+
+/* ============ Misc ============ */
 .hint {
     margin: 14px 2px 0;
     font-size: 10.5px;
     line-height: 1.5;
-    color: #5f6d92;
+    color: var(--dim2);
     text-align: center;
 }
 .ghost {
@@ -527,7 +756,7 @@ body {
     border-radius: 999px;
     border: 1px solid var(--line);
     background: transparent;
-    color: #5f6d92;
+    color: var(--dim2);
     font-family: inherit;
     font-size: 11px;
     letter-spacing: 0.06em;
@@ -535,10 +764,10 @@ body {
 }
 .ghost:active {
     background: rgba(255, 62, 165, 0.1);
-    color: var(--mag);
+    color: var(--surge);
 }
 
-/* ================= TABS ================= */
+/* ============ Tabs ============ */
 #tabs {
     flex: 0 0 auto;
     display: flex;
@@ -569,11 +798,23 @@ body {
     line-height: 1;
 }
 .tab.active {
-    color: var(--cyan);
+    color: var(--quanta);
     text-shadow: 0 0 14px rgba(63, 233, 255, 0.75);
 }
 
-/* ================= TOAST ================= */
+/* entropy tab — hidden until unlocked */
+.tab.entropy-tab {
+    display: none;
+}
+.tab.entropy-tab.revealed {
+    display: flex;
+}
+.tab.entropy-tab.active {
+    color: var(--entropy);
+    text-shadow: 0 0 14px rgba(249, 115, 22, 0.75);
+}
+
+/* ============ Toast ============ */
 #toast {
     position: fixed;
     left: 50%;
@@ -584,7 +825,7 @@ body {
     border-radius: 999px;
     border: 1px solid rgba(63, 233, 255, 0.35);
     background: rgba(20, 30, 50, 0.97);
-    color: var(--cyan);
+    color: var(--quanta);
     font-family: var(--mono);
     font-size: 11.5px;
     text-align: center;
@@ -600,42 +841,13 @@ body {
     transform: translate(-50%, 0);
 }
 
-/* ================= SURGE PANEL ================= */
-.surge-panel{ border-color:rgba(255,62,165,.28); }
-.surge-panel.active{
-  border-color:rgba(255,62,165,.6);
-  animation:surgeGlow 2s ease-in-out infinite;
+/* Feature formula lines in the Live Formula panel */
+.f-feature {
+    color: var(--quanta);
+    font-weight: 700;
+    font-family: var(--mono);
+    font-size: 11.5px;
 }
-@keyframes surgeGlow{
-  0%,100%{ box-shadow:0 0 14px rgba(255,62,165,.10); }
-  50%    { box-shadow:0 0 28px rgba(255,62,165,.30); }
+.f-feature.coh {
+    color: var(--coh);
 }
-.surge-title-row{
-  display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px;
-}
-.surge-mult{
-  font-family:var(--mono); font-size:16px; font-weight:700;
-  color:var(--mag); text-shadow:0 0 12px rgba(255,62,165,.6);
-}
-.consume-btn{
-  width:100%; padding:11px 14px; border-radius:12px;
-  border:1px solid rgba(255,62,165,.5);
-  background:linear-gradient(180deg, rgba(255,62,165,.18), rgba(255,62,165,.04));
-  color:#fff; font-family:inherit; cursor:pointer;
-  display:flex; justify-content:space-between; align-items:center; gap:10px;
-  touch-action:manipulation;
-  transition:transform .07s, border-color .15s, box-shadow .15s;
-}
-.consume-btn:active{ transform:scale(.985); }
-.consume-btn.poor{ opacity:.42; }
-.consume-label{ font-size:13px; font-weight:700; letter-spacing:.12em; }
-.consume-label b{ font-family:var(--mono); color:var(--gold); font-weight:700; }
-.consume-gain{
-  font-family:var(--mono); font-size:13px; font-weight:700;
-  color:var(--mag); text-shadow:0 0 10px rgba(255,62,165,.6);
-}
-.surge-meta{
-  margin-top:8px; font-size:10px; color:#5f6d92;
-  display:flex; justify-content:space-between;
-}
-.surge-meta b{ font-family:var(--mono); color:#9aa9cc; }

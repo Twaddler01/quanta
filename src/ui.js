@@ -1,0 +1,781 @@
+import { el, div, span, on } from "./dom.js";
+import { Config } from "./config.js";
+import { State } from "./state.js";
+import { Calc } from "./calc.js";
+import { Format } from "./format.js";
+import { Wave } from "./wave.js";
+import { clock } from "./clock.js";
+import { mountToast, toast as toastMsg } from "./toast.js";
+import { WaveScope } from "./waveScope.js";
+import { Features } from "./features.js";
+
+export const UI = (() => {
+    const $ = sel => document.querySelector(sel);
+    const refs = { up: {}, mod: {}, cUp: {}, feat: {}, milestones: [] };
+    let lastFormulaSig = "";
+    const NBSP = "\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0";
+
+    let actions = { buy() {}, consume() {}, collapse() {}, reset() {} };
+    function setActions(a) {
+        actions = Object.assign({}, actions, a);
+    }
+
+    /* ================= Shell ================= */
+
+    function statRow(label, id, initial) {
+        return div({ className: "stat-row" }, [
+            span({}, label),
+            el("b", { id }, initial)
+        ]);
+    }
+
+    function buildHud() {
+        return el("header", { id: "hud" }, [
+            div({ className: "qval", id: "quantaVal" }, "0"),
+            div({ className: "qlabel" }, "QUANTA"),
+            div({ className: "hud-sub" }, [
+                div({ className: "pill q" }, [
+                    span({ className: "k" }, "ΔQ/TAP"),
+                    span({ className: "v", id: "tapVal" }, "+1.00")
+                ]),
+                div({ className: "pill q" }, [
+                    span({ className: "k" }, "Q/S"),
+                    span({ className: "v", id: "qpsVal" }, "+0.00")
+                ]),
+                div({ className: "pill c" }, [
+                    span({ className: "k" }, "𝒞"),
+                    span({ className: "v", id: "cohVal" }, "0")
+                ]),
+                div({ className: "pill s" }, [
+                    span({ className: "k" }, "SURGE"),
+                    span({ className: "v", id: "surgeVal" }, "×1.00")
+                ]),
+                div({ className: "pill e", id: "entropyPill" }, [
+                    span({ className: "k" }, "Ξ"),
+                    span({ className: "v", id: "entropyPillVal" }, "0")
+                ])
+            ])
+        ]);
+    }
+
+    function buildSurgePanel() {
+        return div({ className: "panel surge-panel", id: "surgePanel" }, [
+            div({ className: "surge-title-row" }, [
+                div(
+                    { className: "panel-title", style: { margin: 0 } },
+                    "Quantum Surge"
+                ),
+                span({ className: "surge-mult", id: "surgeMult" }, "×1.00")
+            ]),
+            el("button", { className: "consume-btn", id: "consumeBtn" }, [
+                span({ className: "consume-label" }, [
+                    "CONSUME ",
+                    el("b", { id: "consumeCost" }, "10"),
+                    " Q"
+                ]),
+                span({ className: "consume-gain", id: "consumeGain" }, "+0.00")
+            ]),
+            div({ className: "surge-meta" }, [
+                span({}, ["pool ", el("b", { id: "surgePool" }, "0.00")]),
+                span({}, "decays 10%/s · boosts QPS")
+            ])
+        ]);
+    }
+
+    function buildObserveView() {
+        const tapBtn = el("button", { id: "tapBtn", "aria-label": "Observe" }, [
+            span({ className: "tap-glyph" }, "Ψ"),
+            span({ className: "tap-text" }, "OBSERVE")
+        ]);
+        const floaters = div({ className: "floatHost", id: "floaters" });
+        const tapWrap = div({ className: "tapWrap" }, [tapBtn, floaters]);
+
+        const formulaPanel = div({ className: "panel" }, [
+            div({ className: "panel-title" }, "Live Formula"),
+            div({ className: "formula", id: "formula" })
+        ]);
+
+        const telemetry = div({ className: "panel" }, [
+            div({ className: "panel-title" }, "Telemetry"),
+            statRow("Total Quanta harvested", "statTotal", "0"),
+            statRow("Observations performed", "statTaps", "0"),
+            statRow("Effective ΔQ/tap", "statTapGain", "1.00"),
+            statRow("Global resonance", "statGlobal", "×1.00"),
+            statRow("Collapses performed", "statCollapses", "0"),
+            statRow("Uptime", "statTime", "0s")
+        ]);
+
+        const resetBtn = el(
+            "button",
+            { className: "ghost", id: "resetBtn" },
+            "Reset Save"
+        );
+        const hint = div(
+            { className: "hint" },
+            "Surge multiplies your QPS — buy Vacuum Collectors so it has something to multiply."
+        );
+
+        return el(
+            "section",
+            { className: "view active", dataset: { view: "observe" } },
+            [
+                tapWrap,
+                buildSurgePanel(),
+                formulaPanel,
+                telemetry,
+                resetBtn,
+                hint
+            ]
+        );
+    }
+
+    function buildUpgradesView() {
+        return el(
+            "section",
+            { className: "view", dataset: { view: "upgrades" } },
+            [
+                div({ className: "list", id: "upgradeList" }),
+                div(
+                    { className: "hint" },
+                    "Upgrades cost Quanta (cyan) or Coherence (violet). Feature upgrades appear below the core list."
+                )
+            ]
+        );
+    }
+
+    function buildCoherenceView() {
+        const canvas = el("canvas", { id: "waveCanvas" });
+        const cohFloaters = div({ className: "floatHost", id: "cohFloaters" });
+        const waveWrap = div({ className: "wave-wrap" }, [canvas, cohFloaters]);
+
+        const waveQuality = span(
+            { className: "wq-val", id: "waveQuality" },
+            "×1.00"
+        );
+        const readout = div({ className: "wave-readout" }, [
+            span({ className: "wq-label" }, "WAVE QUALITY"),
+            waveQuality
+        ]);
+
+        const collapseBtn = el(
+            "button",
+            { className: "collapse-btn", id: "collapseBtn" },
+            [
+                span({ className: "cb-main" }, "COLLAPSE"),
+                span({ className: "cb-gain", id: "collapseGain" }, "+0 𝒞"),
+                span({ className: "cb-cost" }, [
+                    "cost ",
+                    span({ id: "collapseCost" }, "25"),
+                    " Q"
+                ])
+            ]
+        );
+
+        const wavePanel = div({ className: "panel" }, [
+            div({ className: "panel-title" }, "Coherence Wave"),
+            waveWrap,
+            readout,
+            collapseBtn
+        ]);
+
+        const phasePanel = div({ className: "panel" }, [
+            div({ className: "panel-title" }, "Phase Upgrades"),
+            div({ className: "list", id: "phaseList" })
+        ]);
+
+        const hint = div(
+            { className: "hint" },
+            "Coherence yield = base × (0.1 + 0.9 × wave). Time your collapses into the peaks. Stabilizers raise the wave floor, so troughs hurt less."
+        );
+
+        return el(
+            "section",
+            { className: "view", dataset: { view: "coherence" } },
+            [wavePanel, phasePanel, hint]
+        );
+    }
+
+    function buildModifiersView() {
+        return el(
+            "section",
+            { className: "view", dataset: { view: "modifiers" } },
+            [
+                div({ className: "list", id: "modifierList" }),
+                div(
+                    { className: "hint" },
+                    "Weighted modifiers: each level adds a fixed fraction to its channel. Ψ → observation, Φ → automation, Λ → every channel."
+                )
+            ]
+        );
+    }
+
+    function buildEntropyView() {
+        const headline = div({ className: "entropy-headline" }, [
+            span({ className: "entropy-val", id: "entropyVal" }, "0"),
+            span({ className: "entropy-sym" }, "Ξ")
+        ]);
+        const meta = div({ className: "entropy-meta" }, [
+            span({ className: "k" }, "rate"),
+            span({ className: "v", id: "entropyRate" }, "+0.00/s"),
+            span({ className: "k" }, "multiplier"),
+            span({ className: "v", id: "entropyMult" }, "×1.00")
+        ]);
+        const panel = div({ className: "panel entropy-panel" }, [
+            div({ className: "panel-title" }, "System Disorder"),
+            headline,
+            meta
+        ]);
+        const milestoneList = div({
+            className: "list",
+            id: "entropyMilestones"
+        });
+        const milestonePanel = div({ className: "panel" }, [
+            div({ className: "panel-title" }, "Milestones"),
+            milestoneList
+        ]);
+        const hint = div(
+            { className: "hint" },
+            "Entropy grows from the breadth of your build — every upgrade level and every collapse feeds it. It is never spent; it only gates and amplifies."
+        );
+        return el(
+            "section",
+            {
+                className: "view",
+                dataset: { view: "entropy" },
+                id: "entropyView"
+            },
+            [panel, milestonePanel, hint]
+        );
+    }
+
+    function buildViews() {
+        return el("main", { id: "views" }, [
+            buildObserveView(),
+            buildUpgradesView(),
+            buildCoherenceView(),
+            buildModifiersView(),
+            buildEntropyView()
+        ]);
+    }
+
+    function buildTabs() {
+        const tabs = [
+            ["observe", "◉", "OBSERVE"],
+            ["upgrades", "⚙", "UPGRADES"],
+            ["coherence", "∿", "COHERENCE"],
+            ["modifiers", "Ψ", "MODIFIERS"],
+            ["entropy", "Ξ", "ENTROPY"]
+        ];
+        return el(
+            "nav",
+            { id: "tabs" },
+            tabs.map(([key, icon, label], i) =>
+                el(
+                    "button",
+                    {
+                        className:
+                            "tab" +
+                            (i === 0 ? " active" : "") +
+                            (key === "entropy" ? " entropy-tab" : ""),
+                        dataset: { tab: key }
+                    },
+                    [span({ className: "ic" }, icon), span({}, label)]
+                )
+            )
+        );
+    }
+
+    function buildToastNode() {
+        return div({ id: "toast" });
+    }
+
+    /* ================= Cards ================= */
+
+    function makeCard(container, entry) {
+        const { def, kind, currency, featureId } = entry;
+        const lvB = el("b", {}, "0");
+        const lvSpan = span({ className: "card-lv" }, ["LV ", lvB]);
+
+        const nameChildren = def.sym
+            ? [span({ className: "sym" }, def.sym), " ", def.name]
+            : [def.name];
+        const nameSpan = span({ className: "card-name" }, nameChildren);
+
+        const top = div({ className: "card-top" }, [nameSpan, lvSpan]);
+        const flavor = div({ className: "card-flavor" }, def.flavor);
+        const effect = div({ className: "card-effect" });
+        const costNum = span({});
+        const suffix = currency === "coherence" ? " 𝒞" : " Q";
+        const cost = div({ className: "card-cost" }, [costNum, suffix]);
+
+        const cls = "card" + (currency === "coherence" ? " coh" : "");
+        const btn = el(
+            "button",
+            {
+                className: cls,
+                id: kind + "-" + def.id,
+                dataset: featureId ? { feature: featureId } : undefined,
+                onClick: () => actions.buy(def.id, kind)
+            },
+            [top, flavor, effect, cost]
+        );
+
+        container.appendChild(btn);
+        refs[kind][def.id] = {
+            el: btn,
+            lv: lvB,
+            effect,
+            cost: costNum,
+            def,
+            currency,
+            featureId
+        };
+    }
+
+    function buildEntropyMilestones() {
+        const list = $("#entropyMilestones");
+        refs.milestones = [];
+        for (const ms of Config.ENTROPY.milestones) {
+            const dot = span({ className: "dot" });
+            const label = span({ className: "label" }, ms.label);
+            const at = span({ className: "at" }, "Ξ " + Format.num(ms.at));
+            const row = div({ className: "milestone" }, [dot, label, at]);
+            list.appendChild(row);
+            refs.milestones.push({ el: row, at: ms.at });
+        }
+    }
+
+    function buildFeatureCards() {
+        const list = $("#upgradeList");
+        /* Remove any feature cards already present (rebuild-safe) */
+        list.querySelectorAll(".card[data-feature]").forEach(n => n.remove());
+        refs.feat = {};
+
+        for (const f of Features.all()) {
+            for (const def of f.cards || []) {
+                makeCard(list, {
+                    def,
+                    kind: "feat",
+                    currency: def.currency || "quanta",
+                    featureId: f.id
+                });
+            }
+        }
+    }
+
+    function build() {
+        const toastNode = buildToastNode();
+        document.body.append(buildHud(), buildViews(), buildTabs(), toastNode);
+        mountToast(toastNode);
+
+        for (const def of Config.UPGRADES)
+            makeCard($("#upgradeList"), {
+                def,
+                kind: "up",
+                currency: "quanta"
+            });
+        for (const def of Config.MODIFIERS)
+            makeCard($("#modifierList"), {
+                def,
+                kind: "mod",
+                currency: "quanta"
+            });
+        for (const def of Config.PHASE_UPGRADES)
+            makeCard($("#phaseList"), {
+                def,
+                kind: "cUp",
+                currency: "coherence"
+            });
+
+        buildEntropyMilestones();
+        buildFeatureCards();
+        refreshEntropyVisibility();
+
+        /* Re-render feature cards when the registry changes */
+        Features.onChange(() => {
+            buildFeatureCards();
+            render();
+        });
+    }
+
+    /* ================= Feedback ================= */
+
+    function flash(domId) {
+        const node = document.getElementById(domId);
+        if (!node) return;
+        node.classList.remove("flash");
+        void node.offsetWidth;
+        node.classList.add("flash");
+        setTimeout(() => node.classList.remove("flash"), 420);
+    }
+
+    function floater(host, text, cls) {
+        if (!host) return;
+        if (host.childElementCount > 26) host.firstElementChild.remove();
+        const node = div(
+            {
+                className: "floater" + (cls ? " " + cls : ""),
+                style: { left: 42 + Math.random() * 16 + "%" }
+            },
+            text
+        );
+        node.style.setProperty("--dx", Math.random() * 70 - 35 + "px");
+        node.addEventListener("animationend", () => node.remove());
+        host.appendChild(node);
+    }
+
+    const toast = toastMsg;
+
+    /* ================= Entropy ================= */
+
+    function refreshEntropyVisibility() {
+        const unlocked = Calc.entropyUnlocked();
+        document
+            .querySelector('.tab[data-tab="entropy"]')
+            ?.classList.toggle("revealed", unlocked);
+        $("#entropyPill")?.classList.toggle("revealed", unlocked);
+    }
+
+    function renderEntropy() {
+        const s = State.get();
+        if (!Calc.entropyUnlocked()) return;
+        const entEl = $("#entropyVal");
+        if (!entEl) return;
+        entEl.textContent = Format.plain(s.entropy || 0);
+        $("#entropyRate").textContent =
+            "+" + Format.plain(Calc.entropyRate()) + "/s";
+        $("#entropyMult").textContent = "×" + Format.plain(Calc.entropyMult());
+        $("#entropyPillVal").textContent = Format.plain(s.entropy || 0);
+        for (const m of refs.milestones)
+            m.el.classList.toggle("done", (s.entropy || 0) >= m.at);
+    }
+
+    /* ================= Renderers ================= */
+
+    function renderCards() {
+        const s = State.get();
+
+        /* Regular upgrades */
+        for (const def of Config.UPGRADES) {
+            const r = refs.up[def.id];
+            const lv = s.up[def.id] || 0;
+            const cost = def.cost(lv);
+            r.lv.textContent = lv;
+            r.effect.textContent = def.effect(lv);
+            r.cost.textContent = Format.num(cost);
+            r.el.classList.toggle("can", s.quanta >= cost);
+            r.el.classList.toggle("poor", s.quanta < cost);
+        }
+        for (const def of Config.MODIFIERS) {
+            const r = refs.mod[def.id];
+            const lv = s.mod[def.id] || 0;
+            const cost = def.cost(lv);
+            r.lv.textContent = lv;
+            r.effect.textContent =
+                def.sym +
+                " ×" +
+                Format.plain(1 + def.weight * lv) +
+                "  →  ×" +
+                Format.plain(1 + def.weight * (lv + 1));
+            r.cost.textContent = Format.num(cost);
+            r.el.classList.toggle("can", s.quanta >= cost);
+            r.el.classList.toggle("poor", s.quanta < cost);
+        }
+        for (const def of Config.PHASE_UPGRADES) {
+            const r = refs.cUp[def.id];
+            const lv = s.cUp[def.id] || 0;
+            const cost = def.cost(lv);
+            r.lv.textContent = lv;
+            r.effect.textContent = def.effect(lv);
+            r.cost.textContent = Format.num(cost);
+            r.el.classList.toggle("can", s.coherence >= cost);
+            r.el.classList.toggle("poor", s.coherence < cost);
+        }
+        /* Feature upgrades — same treatment, routed by currency */
+        for (const [id, r] of Object.entries(refs.feat)) {
+            const lv = s.feat[id] || 0;
+            const cost = r.def.cost(lv);
+            const bank = r.currency === "coherence" ? s.coherence : s.quanta;
+            r.lv.textContent = lv;
+            r.effect.textContent = r.def.effect(lv);
+            r.cost.textContent = Format.num(cost);
+            r.el.classList.toggle("can", bank >= cost);
+            r.el.classList.toggle("poor", bank < cost);
+        }
+    }
+
+    function renderFormula() {
+        const s = State.get();
+        const entUnlocked = Calc.entropyUnlocked();
+        const entMult = Calc.entropyMult();
+        const entInt = entUnlocked ? Math.round(s.entropy || 0) : 0;
+
+        const tapCtx = { tapGain: Calc.tapGain() };
+
+        /* tap channel */
+        const tT = ["(1+" + s.up.observer + ")"],
+            tV = [1 + s.up.observer];
+        for (const m of Config.MODIFIERS) {
+            if (m.target === "tap" || m.target === "all") {
+                const lv = s.mod[m.id] || 0;
+                if (lv > 0) {
+                    tT.push("(1+" + m.weight + "×" + lv + ")");
+                    tV.push(1 + m.weight * lv);
+                }
+            }
+        }
+        if (s.up.resonance > 0) {
+            tT.push("(1.25^" + s.up.resonance + ")");
+            tV.push(Math.pow(Config.RESONANCE_BASE, s.up.resonance));
+        }
+        if (s.cUp.lock > 0) {
+            tT.push("(1.15^" + s.cUp.lock + ")");
+            tV.push(Math.pow(Config.PHASE_BASE, s.cUp.lock));
+        }
+        if (entUnlocked && entMult !== 1) {
+            tT.push("Ξ" + Format.plain(entMult));
+            tV.push(entMult);
+        }
+        const tRaw = tV.reduce((a, b) => a * b, 1);
+        const tCap = Calc.softcapThreshold("tap");
+        const tFin = Calc.softcap(tRaw, "tap");
+
+        /* auto channel */
+        const aT = ["1.0", String(s.up.collector)],
+            aV = [1.0, s.up.collector];
+        for (const m of Config.MODIFIERS) {
+            if (m.target === "auto" || m.target === "all") {
+                const lv = s.mod[m.id] || 0;
+                if (lv > 0) {
+                    aT.push("(1+" + m.weight + "×" + lv + ")");
+                    aV.push(1 + m.weight * lv);
+                }
+            }
+        }
+        if (s.up.resonance > 0) {
+            aT.push("(1.25^" + s.up.resonance + ")");
+            aV.push(Math.pow(Config.RESONANCE_BASE, s.up.resonance));
+        }
+        if (s.cUp.lock > 0) {
+            aT.push("(1.15^" + s.cUp.lock + ")");
+            aV.push(Math.pow(Config.PHASE_BASE, s.cUp.lock));
+        }
+        if (entUnlocked && entMult !== 1) {
+            aT.push("Ξ" + Format.plain(entMult));
+            aV.push(entMult);
+        }
+        const aRaw = aV.reduce((a, b) => a * b, 1);
+        const aCap = Calc.softcapThreshold("auto");
+        const aFin = Calc.softcap(aRaw, "auto");
+
+        const surgeQ = Math.round((s.surge || 0) * 10) / 10;
+
+        /* Feature formula lines */
+        const featLines = [];
+        for (const f of Features.all()) {
+            if (!f.formula) continue;
+            const line = f.formula(s, tapCtx);
+            if (line?.text) featLines.push(line);
+        }
+
+        const sig = [
+            s.up.observer,
+            s.up.collector,
+            s.up.resonance,
+            s.up.buffer,
+            s.mod.psi,
+            s.mod.phi,
+            s.mod.lam,
+            s.cUp.lock,
+            surgeQ,
+            entInt,
+            entUnlocked ? 1 : 0,
+            s.feat?.tickRate || 0,
+            s.feat?.collapseEcho || 0,
+            featLines.map(l => l.text).join("¦")
+        ].join("|");
+        if (sig === lastFormulaSig) return;
+        lastFormulaSig = sig;
+
+        const children = [
+            div({}, [
+                span({ className: "f-k" }, "ΔQ/tap"),
+                " = " + tT.join(" × ")
+            ]),
+            div(
+                { className: "f-dim" },
+                NBSP + "= " + tV.map(Format.plain).join(" × ")
+            ),
+            div({ className: "f-res" }, NBSP + "= " + Format.num(tFin))
+        ];
+        if (tRaw > tCap) {
+            children.push(
+                div(
+                    { className: "f-cap" },
+                    "softcap: " +
+                        Format.num(tRaw) +
+                        " exceeds cap " +
+                        Format.num(tCap) +
+                        " → " +
+                        Format.num(tFin)
+                )
+            );
+        }
+        children.push(div({ className: "f-sep" }));
+        children.push(
+            div({}, [
+                span({ className: "f-k" }, "dQ/dt"),
+                NBSP + "= " + aT.join(" × ")
+            ])
+        );
+        children.push(
+            div({ className: "f-res" }, NBSP + "= " + Format.num(aFin) + " /s")
+        );
+        if (aRaw > aCap) {
+            children.push(
+                div(
+                    { className: "f-cap" },
+                    "softcap: " +
+                        Format.num(aRaw) +
+                        " exceeds cap " +
+                        Format.num(aCap) +
+                        " → " +
+                        Format.num(aFin)
+                )
+            );
+        }
+        if ((s.surge || 0) > 0.01) {
+            const m = Calc.surgeMult();
+            children.push(
+                div(
+                    { className: "f-surge", style: { marginTop: "6px" } },
+                    "SURGE ×" +
+                        Format.plain(m) +
+                        "  →  dQ/dt = " +
+                        Format.num(aFin * m) +
+                        " /s"
+                )
+            );
+        }
+        if (entUnlocked && entMult !== 1) {
+            children.push(
+                div(
+                    { className: "f-entropy", style: { marginTop: "6px" } },
+                    "Ξ ×" + Format.plain(entMult) + "  applied to BOTH channels"
+                )
+            );
+        }
+        for (const line of featLines) {
+            children.push(
+                div(
+                    {
+                        className:
+                            "f-feature" + (line.accent === "coh" ? " coh" : ""),
+                        style: { marginTop: "6px" }
+                    },
+                    line.text
+                )
+            );
+        }
+
+        $("#formula").replaceChildren(...children);
+    }
+
+    function renderSurge() {
+        const s = State.get();
+        const mult = Calc.surgeMult();
+        const pool = s.surge || 0;
+
+        const surgeValEl = $("#surgeVal");
+        if (!surgeValEl) return;
+
+        surgeValEl.textContent = "×" + Format.plain(mult);
+        $("#surgeMult").textContent = "×" + Format.plain(mult);
+        $("#surgePool").textContent = Format.plain(pool);
+
+        const cost = Calc.surgeCost();
+        const gain = Calc.surgeGain();
+        $("#consumeCost").textContent = Format.num(cost);
+        $("#consumeGain").textContent = "+" + Format.plain(gain);
+
+        const btn = $("#consumeBtn");
+        btn.classList.toggle("poor", s.quanta < cost);
+        $("#surgePanel").classList.toggle("active", pool > 0.01);
+    }
+
+    function renderHUD() {
+        const s = State.get();
+        const t = clock();
+
+        $("#quantaVal").textContent = Format.num(s.quanta);
+        $("#tapVal").textContent = "+" + Format.num(Calc.tapGain());
+        $("#qpsVal").textContent = "+" + Format.num(Calc.qps());
+        $("#cohVal").textContent = Format.num(s.coherence);
+
+        renderSurge();
+        renderEntropy();
+
+        const q = Wave.quality(t);
+        const wq = $("#waveQuality");
+        wq.textContent = "×" + Format.plain(q);
+        wq.classList.toggle("hot", q > 0.9);
+
+        const gain = Calc.coherenceGain(t);
+        const cost = Calc.collapseCost();
+        $("#collapseGain").textContent = "+" + Format.num(gain) + " 𝒞";
+        $("#collapseCost").textContent = Format.num(cost);
+
+        const btn = $("#collapseBtn");
+        btn.classList.toggle("hot", q > 0.9);
+        btn.classList.toggle("poor", s.quanta < cost);
+    }
+
+    function renderStats() {
+        const s = State.get();
+        $("#statTotal").textContent = Format.num(s.total);
+        $("#statTaps").textContent = Format.num(s.taps);
+        $("#statTapGain").textContent = Format.num(Calc.tapGain());
+        $("#statGlobal").textContent = "×" + Format.num(Calc.globalMult());
+        $("#statCollapses").textContent = Format.num(s.collapses);
+        $("#statTime").textContent = Format.time((Date.now() - s.start) / 1000);
+    }
+
+    function render() {
+        renderHUD();
+        renderCards();
+        renderFormula();
+        renderStats();
+    }
+
+    function wireShell() {
+        document.querySelectorAll(".tab").forEach(tab => {
+            on(tab, "click", () => {
+                document
+                    .querySelectorAll(".tab")
+                    .forEach(t => t.classList.toggle("active", t === tab));
+                const name = tab.dataset.tab;
+                document
+                    .querySelectorAll(".view")
+                    .forEach(v =>
+                        v.classList.toggle("active", v.dataset.view === name)
+                    );
+                document.getElementById("views").scrollTop = 0;
+                WaveScope.setVisible(name === "coherence");
+                render();
+            });
+        });
+        on($("#resetBtn"), "click", () => actions.reset());
+    }
+
+    return {
+        build,
+        wireShell,
+        setActions,
+        render,
+        refreshEntropyVisibility,
+        flash,
+        floater,
+        toast,
+        refs
+    };
+})();
