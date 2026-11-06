@@ -266,7 +266,7 @@ export const UI = (() => {
         const featureEls = [];
         for (const f of Features.all()) {
             for (const v of f.views || []) {
-                const mounted = v.mount({ UI: api, Save });
+                const mounted = v.mount({ UI: api, Save, Calc });
                 featureViews[v.id] = mounted;
                 featureEls.push(mounted.element);
             }
@@ -530,11 +530,11 @@ export const UI = (() => {
         if (!Calc.entropyUnlocked()) return;
         const entEl = $("#entropyVal");
         if (!entEl) return;
-        entEl.textContent = Format.plain(s.entropy || 0);
+        entEl.textContent = Format.precise(s.entropy || 0);
         $("#entropyRate").textContent =
             "+" + Format.plain(Calc.entropyRate()) + "/s";
         $("#entropyMult").textContent = "×" + Format.plain(Calc.entropyMult());
-        $("#entropyPillVal").textContent = Format.plain(s.entropy || 0);
+        $("#entropyPillVal").textContent = Format.precise(s.entropy || 0);
         for (const m of refs.milestones)
             m.el.classList.toggle("done", (s.entropy || 0) >= m.at);
     }

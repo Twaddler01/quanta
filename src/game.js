@@ -147,8 +147,8 @@ export const Game = (() => {
 
     function reset() {
         if (!confirm("Erase all progress and start over?")) return;
-        Save.disable();   // stop unload/pagehide/visibilitychange from re-saving
-        Save.wipe();      // now safely remove the key
+        Save.disable(); // stop unload/pagehide/visibilitychange from re-saving
+        Save.wipe(); // now safely remove the key
         location.reload();
     }
 
@@ -262,11 +262,16 @@ export const Game = (() => {
         }
 
         /* 2. Passive gain */
+        /* 2. Passive gain */
         const passive = Calc.effectiveQps() * dt;
-        if (passive > 0) {
+        if (passive > 0 && Number.isFinite(passive)) {
             s.quanta += passive;
             s.total += passive;
         }
+
+        /* 2b. Sanity net — if anything upstream corrupted quanta, recover */
+        if (!Number.isFinite(s.quanta)) s.quanta = 0;
+        if (!Number.isFinite(s.total)) s.total = 0;
 
         /* 3. Feature ticks (may add quanta) */
         Features.hook("onTick", s, dt, {

@@ -1109,3 +1109,34 @@ body {
 }
 .exchange-btn.gdp-sell.can .amount { color: var(--cost); }
 .exchange-btn.gdp-sell.poor { opacity: 0.42; }
+
+/* Market suppression badge — shown while GDP market lock is active */
+.price-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.market-suppress-badge {
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(255, 62, 165, 0.15);
+    border: 1px solid rgba(255, 62, 165, 0.5);
+    color: var(--surge);
+    font-family: var(--mono);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    animation: suppressPulse 1.4s ease-in-out infinite;
+}
+.market-suppress-badge.hidden { display: none; }
+
+.exchange-price.suppressed {
+    color: var(--surge);
+    text-shadow: 0 0 16px rgba(255, 62, 165, 0.4);
+}
+
+@keyframes suppressPulse {
+    0%, 100% { opacity: 0.65; }
+    50%      { opacity: 1.00; }
+}

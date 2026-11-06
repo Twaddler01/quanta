@@ -69,7 +69,10 @@ export const Save = (() => {
             },
             _autoAcc: num(parsed._autoAcc),
             _tickAcc: num(parsed._tickAcc),
-            gdp: num(parsed.gdp)
+            gdp: num(parsed.gdp),
+            _waveLockUntil: num(parsed._waveLockUntil),
+            _cashOutCooldownUntil: num(parsed._cashOutCooldownUntil),
+            _lastCashOutAt: num(parsed._lastCashOutAt) || num(parsed.start) || Date.now()
         };
         for (const k in merged.up) merged.up[k] = clampInt(merged.up[k]);
         for (const k in merged.mod) merged.mod[k] = clampInt(merged.mod[k]);
@@ -86,6 +89,20 @@ export const Save = (() => {
         ).length;
 
         State.replace(merged);
+
+        /* --- Sanitize: any non-finite field becomes its safe default --- */
+        {
+            const s = State.get();
+            if (!Number.isFinite(s.quanta)) s.quanta = 0;
+            if (!Number.isFinite(s.total)) s.total = 0;
+            if (!Number.isFinite(s.coherence)) s.coherence = 0;
+            if (!Number.isFinite(s.surge)) s.surge = 0;
+            if (!Number.isFinite(s.entropy)) s.entropy = 0;
+            if (!Number.isFinite(s.gdp) || s.gdp < 0)
+                s.gdp = Config.FEATURES.exchange.gdp.baselineGdp;
+            if (!Number.isFinite(s.portfolio?.holdings?.bonds))
+                s.portfolio.holdings.bonds = 0;
+        }
 
         const away = Math.min(
             (Date.now() - merged.lastSave) / 1000,

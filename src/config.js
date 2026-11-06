@@ -150,7 +150,7 @@ export const Config = (() => {
     /* NEW — Entropy */
     const ENTROPY = {
         unlockTotal: 20000,
-        baseRate: 0.05,
+        baseRate: 0.01,
         collapseWeight: 0.05,
         multPerEntropy: 0.003,
         milestones: [
@@ -368,11 +368,27 @@ export const Config = (() => {
             spread: 0.05, // sell at P × unitCost × (1 − spread)
 
             /* dividend yield */
-            baseDividend: 2.0, // Q/s per bond, before milestones
+            baseDividend: 0.05, // Q/s per bond, before milestones
 
             milestones: [
-                { at: 10, divMult: 1.5, label: "dividend ×1.5" },
-                { at: 200, divMult: 2.5, label: "dividend ×2.5" }
+                {
+                    at: 10,
+                    divMult: 1.5,
+                    gdpRateMult: 1.2,
+                    label: "dividend ×1.5 · GDP growth ×1.2"
+                },
+                {
+                    at: 200,
+                    divMult: 2,
+                    gdpRateMult: 1.5,
+                    label: "dividend ×2 · GDP growth ×1.5"
+                },
+                {
+                    at: 300,
+                    divMult: 1,
+                    gdpRateMult: 3,
+                    label: "GDP growth ×3"
+                }
             ],
 
             /* capacity */
@@ -396,7 +412,11 @@ export const Config = (() => {
                 stateCoefficient: 0.5,
                 minStateMult: 0.25,
                 maxStateMult: 5.0,
-                quantaPerGdp: 25,
+                quantaPerGdp: 50,
+                waveLockSeconds: 8,
+                requireBondsForGrowth: true, // GDP rate scales with bonds; 0 bonds = 0 growth
+                minBondsForCashOutPct: 1.0, // must be at full capacity (lower to 0.75 for lenient)
+                cashOutCooldownSeconds: 30, // min time between cash outs
                 entropyRateFactor: 0,
                 milestones: [
                     {
@@ -425,6 +445,11 @@ export const Config = (() => {
             /* ----- API ----- */
 
             price(t) {
+                if (Date.now() < (State.get()._waveLockUntil || 0)) return 0;
+                return FEATURES.exchange._naturalPrice(t);
+            },
+
+            _naturalPrice(t) {
                 const c = FEATURES.exchange;
                 const ent = State.get().entropy || 0;
                 const vol = Math.min(
@@ -437,6 +462,10 @@ export const Config = (() => {
                         c.priceAmp2 * Math.sin(t * c.period2 + c.phase2)) *
                         vol;
                 return Math.max(c.minPrice, Math.min(c.maxPrice, raw));
+            },
+
+            isLocked() {
+                return Date.now() < (State.get()._waveLockUntil || 0);
             },
 
             capacity() {
@@ -467,21 +496,25 @@ export const Config = (() => {
                 if (holdings === 0) return 0;
                 let mult = 1;
                 for (const ms of c.milestones) {
-                    if (holdings >= ms.at) mult *= ms.divMult;
+                    if (holdings >= ms.at && ms.divMult) mult *= ms.divMult;
                 }
-                return holdings * c.baseDividend * mult;
+                mult *= FEATURES.exchange.economyMult();
+                const result = holdings * c.baseDividend * mult;
+                return Number.isFinite(result) ? result : 0;
             },
 
             buyBonds(n) {
                 const c = FEATURES.exchange;
                 const s = State.get();
+                if (Date.now() < (s._waveLockUntil || 0))
+                    return { amount: 0, cost: 0, locked: true };
                 const m = FEATURES.exchange.ensurePortfolio();
 
                 const held = m.holdings.bonds || 0;
                 const space = Math.max(0, c.capacity() - held);
                 if (space <= 0) return { amount: 0, cost: 0 };
 
-                const unit = c.price(Date.now() / 1000) * c.unitCost;
+                const unit = c._naturalPrice(Date.now() / 1000) * c.unitCost;
                 const canAfford = Math.floor(s.quanta / unit);
                 const amount = Math.min(n, space, canAfford);
                 if (amount <= 0) return { amount: 0, cost: 0 };
@@ -502,7 +535,9 @@ export const Config = (() => {
                 if (amount <= 0) return { amount: 0, gain: 0 };
 
                 const unit =
-                    c.price(Date.now() / 1000) * c.unitCost * (1 - c.spread);
+                    c._naturalPrice(Date.now() / 1000) *
+                    c.unitCost *
+                    (1 - c.spread);
                 const gain = unit * amount;
                 s.quanta += gain;
                 s.total += gain;
@@ -510,16 +545,34 @@ export const Config = (() => {
                 return { amount, gain };
             },
 
+            bondGdpRateMult(state) {
+                const c = FEATURES.exchange;
+                const src = state || State.get();
+                const holdings = src.portfolio?.holdings?.bonds || 0;
+                let m = 1;
+                for (const ms of c.milestones) {
+                    if (holdings >= ms.at && ms.gdpRateMult)
+                        m *= ms.gdpRateMult;
+                }
+                return m;
+            },
+
             gdpRate() {
                 const c = FEATURES.exchange;
                 const s = State.get();
                 const bonds = s.portfolio?.holdings?.bonds || 0;
+                if (c.gdp.requireBondsForGrowth && bonds <= 0) return 0;
+                const bondFactor = c.gdp.requireBondsForGrowth
+                    ? bonds * c.gdp.perBondBonus
+                    : 1 + bonds * c.gdp.perBondBonus;
                 const entropyFactor =
                     1 + (s.entropy || 0) * c.gdp.entropyRateFactor;
+                const milestoneFactor = FEATURES.exchange.bondGdpRateMult();
                 return (
                     c.gdp.baseRate *
-                    (1 + bonds * c.gdp.perBondBonus) *
-                    entropyFactor
+                    bondFactor *
+                    entropyFactor *
+                    milestoneFactor
                 );
             },
 
@@ -528,13 +581,43 @@ export const Config = (() => {
                 if (!state.portfolio?.everVisited) return;
                 const c = FEATURES.exchange;
                 const bonds = state.portfolio?.holdings?.bonds || 0;
+                if (c.gdp.requireBondsForGrowth && bonds <= 0) return;
+                const bondFactor = c.gdp.requireBondsForGrowth
+                    ? bonds * c.gdp.perBondBonus
+                    : 1 + bonds * c.gdp.perBondBonus;
                 const entropyFactor =
                     1 + (state.entropy || 0) * c.gdp.entropyRateFactor;
+                const milestoneFactor =
+                    FEATURES.exchange.bondGdpRateMult(state);
                 const rate =
                     c.gdp.baseRate *
-                    (1 + bonds * c.gdp.perBondBonus) *
-                    entropyFactor;
+                    bondFactor *
+                    entropyFactor *
+                    milestoneFactor;
                 state.gdp = (state.gdp || 0) + rate * seconds;
+            },
+
+            economyMult() {
+                const s = State.get();
+                const reson = Math.pow(
+                    Config.RESONANCE_BASE,
+                    s.up.resonance || 0
+                );
+                const phase = Math.pow(Config.PHASE_BASE, s.cUp.lock || 0);
+                let entMult = 1;
+                if (
+                    s.entropyUnlocked ||
+                    s.total >= Config.ENTROPY.unlockTotal
+                ) {
+                    const e = s.entropy || 0;
+                    let bonus = 1;
+                    for (const ms of Config.ENTROPY.milestones) {
+                        if (e >= ms.at && ms.kind === "multBonus")
+                            bonus *= ms.amount;
+                    }
+                    entMult = (1 + Config.ENTROPY.multPerEntropy * e) * bonus;
+                }
+                return reson * phase * entMult;
             },
 
             gdpCoefficient() {
@@ -571,17 +654,146 @@ export const Config = (() => {
                 );
             },
 
-            withdrawGdp() {
+            cashOutPayout(ctx) {
                 const c = FEATURES.exchange;
                 const s = State.get();
+                const surplus = Math.max(0, (s.gdp || 0) - c.gdp.baselineGdp);
+                if (surplus <= 0) return 0;
+
+                /* Bonds always liquidate at market value — no cap, no multiplier */
+                const held = s.portfolio?.holdings?.bonds || 0;
+                const bondsValue =
+                    held > 0
+                        ? c._naturalPrice(Date.now() / 1000) *
+                          c.unitCost *
+                          (1 - c.spread) *
+                          held
+                        : 0;
+
+                /* GDP bonus grows superlinearly with hold time */
+                const gdpRaw = surplus * c.gdp.quantaPerGdp;
+                const lastReset = s._lastCashOutAt || s.start || Date.now();
+                const holdSeconds = Math.max(
+                    0,
+                    (Date.now() - lastReset) / 1000
+                );
+                const holdMult = 1 + Math.pow(holdSeconds / 60, 1.5);
+
+                let gdpBonus = gdpRaw * holdMult;
+
+                /* Early cap: first 30s after a cash-out, limit only the GDP bonus.
+       Bonds always liquidate at value (your own money back). */
+                if (holdSeconds < 30 && ctx) {
+                    const earlyCap = Math.max(
+                        10 * (ctx.tapGain || 0),
+                        ctx.qps || 0
+                    );
+                    if (earlyCap > 0) gdpBonus = Math.min(gdpBonus, earlyCap);
+                }
+
+                return bondsValue + gdpBonus;
+            },
+
+            holdMult() {
+                const s = State.get();
+                const lastReset = s._lastCashOutAt || s.start || Date.now();
+                const holdSeconds = Math.max(
+                    0,
+                    (Date.now() - lastReset) / 1000
+                );
+                return {
+                    seconds: holdSeconds,
+                    mult: 1 + Math.pow(holdSeconds / 60, 1.5)
+                };
+            },
+
+            canCashOut() {
+                const c = FEATURES.exchange;
+                const s = State.get();
+
+                // 1. Cooldown
+                const cooldownLeft =
+                    ((s._cashOutCooldownUntil || 0) - Date.now()) / 1000;
+                if (cooldownLeft > 0) {
+                    return { ok: false, reason: "cooldown", cooldownLeft };
+                }
+
+                // 2. GDP must exceed baseline
+                const surplus = Math.max(0, (s.gdp || 0) - c.gdp.baselineGdp);
+                if (surplus <= 0) {
+                    return { ok: false, reason: "no-gdp-surplus" };
+                }
+
+                // 3. Bond threshold
+                const held = s.portfolio?.holdings?.bonds || 0;
+                const required = Math.ceil(
+                    c.capacity() * c.gdp.minBondsForCashOutPct
+                );
+                if (held < required) {
+                    return {
+                        ok: false,
+                        reason: "insufficient-bonds",
+                        required,
+                        held
+                    };
+                }
+
+                return { ok: true };
+            },
+
+            withdrawGdp(ctx) {
+                const c = FEATURES.exchange;
+                const s = State.get();
+
+                const check = FEATURES.exchange.canCashOut();
+                if (!check.ok) {
+                    return {
+                        payout: 0,
+                        bondsSold: 0,
+                        previousGdp: s.gdp || 0,
+                        waveLockMs: 0,
+                        rejected: check.reason
+                    };
+                }
+
+                const m = FEATURES.exchange.ensurePortfolio();
                 const gdp = s.gdp || 0;
-                const surplus = Math.max(0, gdp - c.gdp.baselineGdp);
-                if (surplus <= 0) return { payout: 0, previousGdp: gdp };
-                const payout = surplus * c.gdp.quantaPerGdp;
+                const totalPayout = FEATURES.exchange.cashOutPayout(ctx);
+                if (totalPayout <= 0) {
+                    return {
+                        payout: 0,
+                        bondsSold: 0,
+                        previousGdp: gdp,
+                        waveLockMs: 0,
+                        rejected: "no-payout"
+                    };
+                }
+
+                const held = m.holdings.bonds || 0;
+                const { seconds: holdSeconds, mult: holdMult } =
+                    FEATURES.exchange.holdMult();
+
+                m.holdings.bonds = 0;
                 s.gdp = c.gdp.baselineGdp;
-                s.quanta += payout;
-                s.total += payout;
-                return { payout, previousGdp: gdp };
+                s.quanta += totalPayout;
+                s.total += totalPayout;
+
+                const now = Date.now();
+                const lockMs = (c.gdp.waveLockSeconds || 8) * 1000;
+                const cooldownMs = (c.gdp.cashOutCooldownSeconds || 30) * 1000;
+                s._waveLockUntil = now + lockMs;
+                s._cashOutCooldownUntil = now + cooldownMs;
+                s._lastCashOutAt = now;
+
+                return {
+                    payout: totalPayout,
+                    bondsSold: held,
+                    previousGdp: gdp,
+                    holdSeconds,
+                    holdMult,
+                    waveLockMs: lockMs,
+                    cooldownMs
+                };
             },
 
             /* ----- card ----- */
@@ -624,6 +836,7 @@ export const Config = (() => {
 
                     if (autoOn) {
                         const c = FEATURES.exchange;
+                        if (Date.now() < (s._waveLockUntil || 0)) return; // skip during lock
                         const cap = c.capacity();
                         if ((s.portfolio.holdings.bonds || 0) >= cap) return;
 
@@ -631,7 +844,7 @@ export const Config = (() => {
                         if (budget <= 0) return;
 
                         const bondCost =
-                            c.price(Date.now() / 1000) * c.unitCost;
+                            c._naturalPrice(Date.now() / 1000) * c.unitCost;
                         s._autoAcc = (s._autoAcc || 0) + budget;
                         const accCap = bondCost * c.autoInvestAccCap;
                         if (s._autoAcc > accCap) s._autoAcc = accCap;
@@ -673,13 +886,20 @@ export const Config = (() => {
                     id: "exchange",
                     icon: "Ⓠ",
                     label: "MARKET",
-                    mount({ UI, Save }) {
+                    mount({ UI, Save, Calc }) {
                         const c = FEATURES.exchange;
 
                         /* ---- element refs ---- */
                         const elPrice = span(
                             { className: "exchange-price" },
                             "1.00"
+                        );
+                        const suppressBadge = span(
+                            {
+                                className: "market-suppress-badge hidden",
+                                id: "marketSuppress"
+                            },
+                            "SUPPRESSED"
                         );
                         const elHeld = span(
                             { className: "exchange-holdings" },
@@ -741,15 +961,13 @@ export const Config = (() => {
                             {},
                             "0 / " + c.gdp.milestones.length
                         );
-                        const elSellPayout = span(
-                            { className: "amount" },
-                            "+0 Q"
-                        );
+                        const elSellPayout = span({ className: "amount" }, "+0 Q");
+                        const elHoldTime = el("b", {}, "0s");
 
                         const sellBtn = el(
                             "button",
                             { className: "exchange-btn sell gdp-sell" },
-                            [span({}, "SELL GDP"), elSellPayout]
+                            [span({}, "CASH OUT"), elSellPayout]
                         );
 
                         const gdpPanel = div(
@@ -767,6 +985,10 @@ export const Config = (() => {
                                 div({ className: "stat-row" }, [
                                     span({}, "GDP milestones"),
                                     elGdpMile
+                                ]),
+                                div({ className: "stat-row" }, [
+                                    span({}, "Hold time"),
+                                    elHoldTime
                                 ]),
                                 sellBtn
                             ]
@@ -825,7 +1047,10 @@ export const Config = (() => {
                                         floaters
                                     ]),
                                     div({ className: "exchange-readout" }, [
-                                        elPrice,
+                                        div({ className: "price-group" }, [
+                                            elPrice,
+                                            suppressBadge
+                                        ]),
                                         elHeld
                                     ]),
                                     div({ className: "stat-row" }, [
@@ -958,21 +1183,22 @@ export const Config = (() => {
                         function render() {
                             const s = State.get();
                             const m = FEATURES.exchange.ensurePortfolio();
+                            const locked = FEATURES.exchange.isLocked();
 
                             const max = c.capacity();
                             const held = m.holdings.bonds || 0;
                             const now = Date.now() / 1000;
-                            const price = c.price(now);
-                            const buyUnit = price * c.unitCost;
+                            const displayPrice = c.price(now); // 0 during lock
+                            const naturalPrice = c._naturalPrice(now); // true price
+                            const buyUnit = naturalPrice * c.unitCost;
                             const sellUnit =
-                                price * c.unitCost * (1 - c.spread);
+                                naturalPrice * c.unitCost * (1 - c.spread);
 
-                            const space = Math.max(0, max - held);
-                            const canAfford = Math.floor(s.quanta / buyUnit);
-                            const buyMaxAmt = Math.min(space, canAfford);
-                            const buy1Amt = Math.min(1, buyMaxAmt);
+                            elPrice.textContent =
+                                "Ⓠ " + Format.plain(displayPrice);
+                            elPrice.classList.toggle("suppressed", locked);
+                            suppressBadge.classList.toggle("hidden", !locked);
 
-                            elPrice.textContent = "Ⓠ " + Format.plain(price);
                             elHeld.textContent = held + " / " + max;
 
                             const divRate = FEATURES.exchange.calcDividend();
@@ -986,10 +1212,16 @@ export const Config = (() => {
                             if (held > 0 || gdp > c.gdp.baselineGdp * 1.01) {
                                 gdpPanel.classList.remove("hidden");
                                 elGdp.textContent = Format.num(gdp);
+                                const rateMult =
+                                    FEATURES.exchange.bondGdpRateMult();
                                 elGdpRate.textContent =
                                     " (+" +
                                     Format.plain(FEATURES.exchange.gdpRate()) +
-                                    "/s)";
+                                    "/s" +
+                                    (rateMult > 1.001
+                                        ? " ×" + Format.plain(rateMult)
+                                        : "") +
+                                    ")";
                                 elGdpMult.textContent =
                                     "×" +
                                     Format.plain(
@@ -999,32 +1231,88 @@ export const Config = (() => {
                                     FEATURES.exchange.gdpMilestonesPassed() +
                                     " / " +
                                     c.gdp.milestones.length;
-                                const payout =
-                                    FEATURES.exchange.gdpSellPayout();
-                                elSellPayout.textContent =
-                                    "+" + Format.num(payout) + " Q";
-                                sellBtn.classList.toggle("can", payout > 0);
-                                sellBtn.classList.toggle("poor", payout <= 0);
+                                const check = FEATURES.exchange.canCashOut();
+                                const s2 = State.get();
+                                if (check.ok) {
+                                    const payout =
+                                        FEATURES.exchange.cashOutPayout({
+                                            tapGain: Calc.tapGain(),
+                                            qps: Calc.effectiveQps()
+                                        });
+                                    const { seconds: holdSec, mult: holdMul } =
+                                        FEATURES.exchange.holdMult();
+                                    elSellPayout.textContent =
+                                        "+" +
+                                        Format.num(payout) +
+                                        " Q · ×" +
+                                        Format.plain(holdMul);
+                                    elHoldTime.textContent =
+                                        Format.time(holdSec);
+                                    sellBtn.classList.add("can");
+                                    sellBtn.classList.remove("poor");
+                                } else {
+                                    sellBtn.classList.remove("can");
+                                    sellBtn.classList.add("poor");
+                                    if (check.reason === "cooldown") {
+                                        elSellPayout.textContent =
+                                            "COOLDOWN " +
+                                            Math.ceil(check.cooldownLeft) +
+                                            "s";
+                                    } else if (
+                                        check.reason === "insufficient-bonds"
+                                    ) {
+                                        elSellPayout.textContent =
+                                            "NEED " +
+                                            (check.required - check.held) +
+                                            " BONDS";
+                                    } else {
+                                        elSellPayout.textContent =
+                                            "GDP AT BASELINE";
+                                    }
+                                }
                             } else {
                                 gdpPanel.classList.add("hidden");
                             }
 
-                            elBuy1Cost.textContent = Format.num(buyUnit) + " Q";
-                            elBuyMaxCost.textContent =
-                                buyMaxAmt > 0
-                                    ? Format.num(buyUnit * buyMaxAmt) + " Q"
-                                    : "—";
+                            if (locked) {
+                                elBuy1Cost.textContent = "LOCKED";
+                                elBuyMaxCost.textContent = "LOCKED";
+                                btnBuy1.classList.add("poor");
+                                btnBuy1.classList.remove("can");
+                                btnBuyMax.classList.add("poor");
+                                btnBuyMax.classList.remove("can");
+                            } else {
+                                const space = Math.max(0, max - held);
+                                const canAfford = Math.floor(
+                                    s.quanta / buyUnit
+                                );
+                                const buyMaxAmt = Math.min(space, canAfford);
+                                const buy1Amt = Math.min(1, buyMaxAmt);
+
+                                elBuy1Cost.textContent =
+                                    Format.num(buyUnit) + " Q";
+                                elBuyMaxCost.textContent =
+                                    buyMaxAmt > 0
+                                        ? Format.num(buyUnit * buyMaxAmt) + " Q"
+                                        : "—";
+                                btnBuy1.classList.toggle("can", buy1Amt >= 1);
+                                btnBuy1.classList.toggle("poor", buy1Amt < 1);
+                                btnBuyMax.classList.toggle(
+                                    "can",
+                                    buyMaxAmt >= 1
+                                );
+                                btnBuyMax.classList.toggle(
+                                    "poor",
+                                    buyMaxAmt < 1
+                                );
+                            }
+
                             elSell1Cost.textContent =
                                 Format.num(sellUnit) + " Q";
                             elSellAllCost.textContent =
                                 held > 0
                                     ? Format.num(sellUnit * held) + " Q"
                                     : "—";
-
-                            btnBuy1.classList.toggle("can", buy1Amt >= 1);
-                            btnBuy1.classList.toggle("poor", buy1Amt < 1);
-                            btnBuyMax.classList.toggle("can", buyMaxAmt >= 1);
-                            btnBuyMax.classList.toggle("poor", buyMaxAmt < 1);
                             btnSell1.classList.toggle("can", held >= 1);
                             btnSell1.classList.toggle("poor", held < 1);
                             btnSellAll.classList.toggle("can", held >= 1);
@@ -1103,20 +1391,51 @@ export const Config = (() => {
                         on(btnSellAll, "click", () => doSell(9999));
                         on(autoBtn, "click", toggleAuto);
                         on(sellBtn, "click", () => {
-                            const r = FEATURES.exchange.withdrawGdp();
-                            if (r.payout <= 0) return;
+                            const r = FEATURES.exchange.withdrawGdp({
+                                tapGain: Calc.tapGain(),
+                                qps: Calc.effectiveQps()
+                            });
+                            if (r.payout <= 0) {
+                                if (r.rejected === "cooldown") {
+                                    UI.toast("Cash-out on cooldown");
+                                } else if (
+                                    r.rejected === "insufficient-bonds"
+                                ) {
+                                    UI.toast("Buy to full bond capacity first");
+                                } else if (r.rejected === "no-gdp-surplus") {
+                                    UI.toast(
+                                        "GDP is at baseline — wait for growth"
+                                    );
+                                }
+                                return;
+                            }
+
                             UI.floater(
                                 floaters,
                                 "+" + Format.num(r.payout) + " Q",
                                 "gold"
                             );
+
+                            const heldPart =
+                                Format.time(r.holdSeconds) +
+                                " · ×" +
+                                Format.plain(r.holdMult);
+                            const bondsPart =
+                                r.bondsSold > 0
+                                    ? " · " + r.bondsSold + " bonds liquidated"
+                                    : "";
+
                             UI.toast(
-                                "Sold GDP: " +
-                                    Format.num(r.previousGdp) +
-                                    " → 10 · +" +
+                                "Cashed out: +" +
                                     Format.num(r.payout) +
-                                    " Q"
+                                    " Q (" +
+                                    heldPart +
+                                    bondsPart +
+                                    ") · next in " +
+                                    (r.cooldownMs / 1000).toFixed(0) +
+                                    "s"
                             );
+
                             if (navigator.vibrate) {
                                 try {
                                     navigator.vibrate(15);

@@ -21,7 +21,10 @@ export const State = (() => {
                 auto: { bonds: false },
                 everVisited: false
             },
-            gdp: 0
+            gdp: 0,
+            _waveLockUntil: 0,
+            _cashOutCooldownUntil: 0,
+            _lastCashOutAt: 0
         };
     }
     let s = blank();
