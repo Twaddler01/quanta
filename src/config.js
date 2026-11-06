@@ -112,10 +112,10 @@ export const Config = (() => {
     ];
 
     const SOFTCAP = {
-        tap: { base: 250, pow: 0.72 },
-        auto: { base: 150, pow: 0.7 }
+        tap: { base: 250, pow: 0.78 },
+        auto: { base: 150, pow: 0.76 }
     };
-    const BUFFER_MULT = 2.5;
+    const BUFFER_MULT = 2.8;
 
     const WAVE = {
         speed: 1.55,
