@@ -826,13 +826,12 @@ export const UI = (() => {
         btn.classList.toggle("poor", s.quanta < cost);
 
         const boost = Wave.entropyBoost();
-const boostEl = $("#waveBoost");
-if (boostEl) {
-    boostEl.textContent = boost > 0
-        ? "Ξ +" + (boost * 100).toFixed(0) + "%"
-        : "";
-    boostEl.classList.toggle("visible", boost > 0);
-}
+        const boostEl = $("#waveBoost");
+        if (boostEl) {
+            boostEl.textContent =
+                boost > 0 ? "Ξ +" + (boost * 100).toFixed(0) + "%" : "";
+            boostEl.classList.toggle("visible", boost > 0);
+        }
     }
 
     function renderStats() {

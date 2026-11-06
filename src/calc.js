@@ -3,7 +3,8 @@ import { State } from "./state.js";
 import { Wave } from "./wave.js";
 
 export const Calc = (() => {
-    const featLevel = id => (State.get().feat?.[id]) || 0;
+    const featLevel = id => State.get().feat?.[id] || 0;
+    const gdpStateMult = () => Config.FEATURES?.exchange?.gdpStateMult?.() ?? 1;
 
     function softcapThreshold(kind) {
         return (
@@ -88,13 +89,19 @@ export const Calc = (() => {
     }
 
     const rawTap = () =>
-        (1 + State.get().up.observer) * channelMult("tap") * globalMult();
+        (1 + State.get().up.observer) *
+        channelMult("tap") *
+        globalMult() *
+        gdpStateMult();
     const tapGain = () => softcap(rawTap(), "tap");
 
     const rawAuto = () =>
-        1.0 * State.get().up.collector * channelMult("auto") * globalMult();
+        1.0 *
+        State.get().up.collector *
+        channelMult("auto") *
+        globalMult() *
+        gdpStateMult();
     const qps = () => softcap(rawAuto(), "auto");
-
     const coherenceBase = () =>
         Math.pow(Config.COHERENCE_BASE, State.get().cUp.harm);
     const coherenceGain = t => coherenceBase() * Wave.quality(t);
@@ -116,9 +123,10 @@ export const Calc = (() => {
     function surgeGain() {
         return Math.log10(1 + surgeCost() / surgeReference());
     }
-
+    
     return {
         featLevel,
+        gdpStateMult,
         softcap,
         softcapThreshold,
         channelMult,

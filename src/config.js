@@ -390,11 +390,36 @@ export const Config = (() => {
 
             /* ===== NEW: Fictional GDP ===== */
             gdp: {
-                baseRate: 1.0, // GDP/s baseline
-                perBondBonus: 0.01, // +1% rate per bond held
-                dividendCoefficient: 0.5, // mult = 1 + coef × log10(1 + GDP)
-                maxDividendBoost: 6, // cap on additive part (max mult = ×7)
-                entropyRateFactor: 0 // set to 0.001 to make entropy boost GDP rate
+                baseRate: 1.0,
+                perBondBonus: 0.01,
+                baselineGdp: 10,
+                stateCoefficient: 0.5,
+                minStateMult: 0.25,
+                maxStateMult: 5.0,
+                quantaPerGdp: 25,
+                entropyRateFactor: 0,
+                milestones: [
+                    {
+                        at: 100,
+                        coefBonus: 0.05,
+                        label: "+0.05 GDP coefficient"
+                    },
+                    {
+                        at: 1000,
+                        coefBonus: 0.1,
+                        label: "+0.10 GDP coefficient"
+                    },
+                    {
+                        at: 10000,
+                        coefBonus: 0.15,
+                        label: "+0.15 GDP coefficient"
+                    },
+                    {
+                        at: 100000,
+                        coefBonus: 0.2,
+                        label: "+0.20 GDP coefficient"
+                    }
+                ]
             },
 
             /* ----- API ----- */
@@ -444,7 +469,6 @@ export const Config = (() => {
                 for (const ms of c.milestones) {
                     if (holdings >= ms.at) mult *= ms.divMult;
                 }
-                mult *= FEATURES.exchange.gdpMultiplier();
                 return holdings * c.baseDividend * mult;
             },
 
@@ -486,16 +510,6 @@ export const Config = (() => {
                 return { amount, gain };
             },
 
-            gdpMultiplier() {
-                const c = FEATURES.exchange;
-                const gdp = State.get().gdp || 0;
-                const boost = Math.min(
-                    c.gdp.maxDividendBoost,
-                    c.gdp.dividendCoefficient * Math.log10(1 + gdp)
-                );
-                return 1 + boost;
-            },
-
             gdpRate() {
                 const c = FEATURES.exchange;
                 const s = State.get();
@@ -521,6 +535,53 @@ export const Config = (() => {
                     (1 + bonds * c.gdp.perBondBonus) *
                     entropyFactor;
                 state.gdp = (state.gdp || 0) + rate * seconds;
+            },
+
+            gdpCoefficient() {
+                const c = FEATURES.exchange;
+                let coef = c.gdp.stateCoefficient;
+                for (const ms of c.gdp.milestones) {
+                    if ((State.get().gdp || 0) >= ms.at) coef += ms.coefBonus;
+                }
+                return coef;
+            },
+
+            gdpMilestonesPassed() {
+                const gdp = State.get().gdp || 0;
+                return FEATURES.exchange.gdp.milestones.filter(m => gdp >= m.at)
+                    .length;
+            },
+
+            gdpStateMult() {
+                const c = FEATURES.exchange;
+                const gdp = Math.max(0.001, State.get().gdp || 0);
+                const coef = FEATURES.exchange.gdpCoefficient();
+                const raw = 1 + coef * Math.log10(gdp / c.gdp.baselineGdp);
+                return Math.max(
+                    c.gdp.minStateMult,
+                    Math.min(c.gdp.maxStateMult, raw)
+                );
+            },
+
+            gdpSellPayout() {
+                const c = FEATURES.exchange;
+                const gdp = State.get().gdp || 0;
+                return (
+                    Math.max(0, gdp - c.gdp.baselineGdp) * c.gdp.quantaPerGdp
+                );
+            },
+
+            withdrawGdp() {
+                const c = FEATURES.exchange;
+                const s = State.get();
+                const gdp = s.gdp || 0;
+                const surplus = Math.max(0, gdp - c.gdp.baselineGdp);
+                if (surplus <= 0) return { payout: 0, previousGdp: gdp };
+                const payout = surplus * c.gdp.quantaPerGdp;
+                s.gdp = c.gdp.baselineGdp;
+                s.quanta += payout;
+                s.total += payout;
+                return { payout, previousGdp: gdp };
             },
 
             /* ----- card ----- */
@@ -554,7 +615,9 @@ export const Config = (() => {
                     if (holdings === 0 && !autoOn) return;
 
                     if (holdings > 0) {
-                        const gain = FEATURES.exchange.calcDividend() * dt;
+                        const mult = FEATURES.exchange.gdpStateMult();
+                        const gain =
+                            FEATURES.exchange.calcDividend() * mult * dt;
                         s.quanta += gain;
                         s.total += gain;
                     }
@@ -589,14 +652,19 @@ export const Config = (() => {
 
             /* ----- formula line ----- */
             formula() {
+                const s = State.get();
+                const gdp = s.gdp || 0;
+                const stateMult = FEATURES.exchange.gdpStateMult();
                 const div = FEATURES.exchange.calcDividend();
-                if (div <= 0) return null;
-                const gdpMult = FEATURES.exchange.gdpMultiplier();
-                let text = `BONDS +${Format.num(div)} Q/s`;
-                if (gdpMult > 1.005) {
-                    text += ` · GDP ×${gdpMult.toFixed(2)}`;
+
+                const parts = [];
+                if (div > 0)
+                    parts.push(`BONDS +${Format.num(div * stateMult)} Q/s`);
+                if (Math.abs(stateMult - 1) > 0.005) {
+                    parts.push(`GDP ×${stateMult.toFixed(2)}`);
                 }
-                return { text, accent: "market" };
+                if (parts.length === 0) return null;
+                return { text: parts.join(" · "), accent: "market" };
             },
 
             /* ----- view ----- */
@@ -619,10 +687,6 @@ export const Config = (() => {
                         );
                         const elDiv = el("b", {}, "+0.00 Q/s");
                         const elValue = el("b", {}, "0 Q");
-
-                        const elGdp = el("b", {}, "0");
-                        const elGdpRate = span({}, " (+0.00/s)");
-                        const elGdpMult = el("b", {}, "×1.00");
 
                         const elBuy1Cost = span(
                             { className: "amount" },
@@ -665,13 +729,47 @@ export const Config = (() => {
                             id: "marketFloaters"
                         });
 
-                        const gdpRow = div({ className: "stat-row hidden" }, [
-                            span({}, "Economic Output"),
-                            el("b", {}, [elGdp, " ", elGdpRate])
-                        ]);
-                        const gdpMultRow = div(
-                            { className: "stat-row hidden" },
-                            [span({}, "GDP Dividend Bonus"), elGdpMult]
+                        /* ---- GDP panel refs ---- */
+                        const elGdp = el("b", {}, "10");
+                        const elGdpRate = span(
+                            { className: "gdp-rate" },
+                            " (+0.00/s)"
+                        );
+                        const elGdpMult = el("b", {}, "×1.00");
+                        const elGdpMile = el(
+                            "b",
+                            {},
+                            "0 / " + c.gdp.milestones.length
+                        );
+                        const elSellPayout = span(
+                            { className: "amount" },
+                            "+0 Q"
+                        );
+
+                        const sellBtn = el(
+                            "button",
+                            { className: "exchange-btn sell gdp-sell" },
+                            [span({}, "SELL GDP"), elSellPayout]
+                        );
+
+                        const gdpPanel = div(
+                            { className: "panel gdp-panel hidden" },
+                            [
+                                div({ className: "panel-title" }, "Economy"),
+                                div({ className: "stat-row" }, [
+                                    span({}, "GDP"),
+                                    el("b", {}, [elGdp, " ", elGdpRate])
+                                ]),
+                                div({ className: "stat-row" }, [
+                                    span({}, "GDP state mult"),
+                                    elGdpMult
+                                ]),
+                                div({ className: "stat-row" }, [
+                                    span({}, "GDP milestones"),
+                                    elGdpMile
+                                ]),
+                                sellBtn
+                            ]
                         );
 
                         /* ---- auto-invest panel ---- */
@@ -738,8 +836,6 @@ export const Config = (() => {
                                         span({}, "Portfolio value"),
                                         elValue
                                     ]),
-                                    gdpRow,
-                                    gdpMultRow,
                                     div({ className: "exchange-buttons" }, [
                                         div({ className: "exchange-row" }, [
                                             btnBuy1,
@@ -753,11 +849,12 @@ export const Config = (() => {
                                 ]),
                                 autoPanel,
                                 milestonePanel,
+                                gdpPanel,
                                 div(
                                     { className: "hint" },
-                                    "Buy bonds when the price is low (green). Each bond pays passive Quanta every second — " +
-                                        "dividends scale with holdings and milestones. Entropy amplifies volatility. " +
-                                        "Prices cycle roughly every 18 seconds."
+                                    "Buy bonds when the price is low (green). Holdings pay passive dividends. " +
+                                        "GDP multiplies ALL Q/s — tap, passive, and dividends — but can also drag you below ×1. " +
+                                        "Sell GDP to cash out for Quanta, resetting the economy to neutral."
                                 )
                             ]
                         );
@@ -884,10 +981,11 @@ export const Config = (() => {
                             elValue.textContent =
                                 Format.num(held * buyUnit) + " Q";
 
-                            if (held > 0) {
-                                gdpRow.classList.remove("hidden");
-                                gdpMultRow.classList.remove("hidden");
-                                elGdp.textContent = Format.num(s.gdp || 0);
+                            /* ---- GDP panel ---- */
+                            const gdp = s.gdp || 0;
+                            if (held > 0 || gdp > c.gdp.baselineGdp * 1.01) {
+                                gdpPanel.classList.remove("hidden");
+                                elGdp.textContent = Format.num(gdp);
                                 elGdpRate.textContent =
                                     " (+" +
                                     Format.plain(FEATURES.exchange.gdpRate()) +
@@ -895,11 +993,20 @@ export const Config = (() => {
                                 elGdpMult.textContent =
                                     "×" +
                                     Format.plain(
-                                        FEATURES.exchange.gdpMultiplier()
+                                        FEATURES.exchange.gdpStateMult()
                                     );
+                                elGdpMile.textContent =
+                                    FEATURES.exchange.gdpMilestonesPassed() +
+                                    " / " +
+                                    c.gdp.milestones.length;
+                                const payout =
+                                    FEATURES.exchange.gdpSellPayout();
+                                elSellPayout.textContent =
+                                    "+" + Format.num(payout) + " Q";
+                                sellBtn.classList.toggle("can", payout > 0);
+                                sellBtn.classList.toggle("poor", payout <= 0);
                             } else {
-                                gdpRow.classList.add("hidden");
-                                gdpMultRow.classList.add("hidden");
+                                gdpPanel.classList.add("hidden");
                             }
 
                             elBuy1Cost.textContent = Format.num(buyUnit) + " Q";
@@ -995,6 +1102,29 @@ export const Config = (() => {
                         on(btnSell1, "click", () => doSell(1));
                         on(btnSellAll, "click", () => doSell(9999));
                         on(autoBtn, "click", toggleAuto);
+                        on(sellBtn, "click", () => {
+                            const r = FEATURES.exchange.withdrawGdp();
+                            if (r.payout <= 0) return;
+                            UI.floater(
+                                floaters,
+                                "+" + Format.num(r.payout) + " Q",
+                                "gold"
+                            );
+                            UI.toast(
+                                "Sold GDP: " +
+                                    Format.num(r.previousGdp) +
+                                    " → 10 · +" +
+                                    Format.num(r.payout) +
+                                    " Q"
+                            );
+                            if (navigator.vibrate) {
+                                try {
+                                    navigator.vibrate(15);
+                                } catch (e) {}
+                            }
+                            render();
+                            Save.write();
+                        });
 
                         return {
                             element: section,
