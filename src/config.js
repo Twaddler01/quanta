@@ -388,6 +388,12 @@ export const Config = (() => {
                     divMult: 1,
                     gdpRateMult: 3,
                     label: "GDP growth ×3"
+                },
+                {
+                    at: 350,
+                    divMult: 1,
+                    gdpRateMult: 4,
+                    label: "GDP growth ×4"
                 }
             ],
 
@@ -418,6 +424,8 @@ export const Config = (() => {
                 minBondsForCashOutPct: 1.0, // must be at full capacity (lower to 0.75 for lenient)
                 cashOutCooldownSeconds: 30, // min time between cash outs
                 entropyRateFactor: 0,
+                entropyCostFactor: 1.0,
+                maxUnitCostMult: 500,
                 milestones: [
                     {
                         at: 100,
@@ -462,6 +470,16 @@ export const Config = (() => {
                         c.priceAmp2 * Math.sin(t * c.period2 + c.phase2)) *
                         vol;
                 return Math.max(c.minPrice, Math.min(c.maxPrice, raw));
+            },
+
+            effectiveUnitCost() {
+                const c = FEATURES.exchange;
+                const ent = State.get().entropy || 0;
+                const factor = Math.min(
+                    c.gdp.maxUnitCostMult,
+                    1 + ent * c.gdp.entropyCostFactor
+                );
+                return c.unitCost * factor;
             },
 
             isLocked() {
@@ -513,8 +531,8 @@ export const Config = (() => {
                 const held = m.holdings.bonds || 0;
                 const space = Math.max(0, c.capacity() - held);
                 if (space <= 0) return { amount: 0, cost: 0 };
-
-                const unit = c._naturalPrice(Date.now() / 1000) * c.unitCost;
+                
+                const unit = c._naturalPrice(Date.now() / 1000) * c.effectiveUnitCost();
                 const canAfford = Math.floor(s.quanta / unit);
                 const amount = Math.min(n, space, canAfford);
                 if (amount <= 0) return { amount: 0, cost: 0 };
@@ -536,7 +554,7 @@ export const Config = (() => {
 
                 const unit =
                     c._naturalPrice(Date.now() / 1000) *
-                    c.unitCost *
+                    c.effectiveUnitCost() *
                     (1 - c.spread);
                 const gain = unit * amount;
                 s.quanta += gain;
@@ -662,13 +680,10 @@ export const Config = (() => {
 
                 /* Bonds always liquidate at market value — no cap, no multiplier */
                 const held = s.portfolio?.holdings?.bonds || 0;
-                const bondsValue =
-                    held > 0
-                        ? c._naturalPrice(Date.now() / 1000) *
-                          c.unitCost *
-                          (1 - c.spread) *
-                          held
-                        : 0;
+                const bondsValue = held > 0
+                    ? c._naturalPrice(Date.now() / 1000) *
+                      c.effectiveUnitCost() * (1 - c.spread) * held
+                    : 0;
 
                 /* GDP bonus grows superlinearly with hold time */
                 const gdpRaw = surplus * c.gdp.quantaPerGdp;
@@ -843,8 +858,7 @@ export const Config = (() => {
                         const budget = (ctx.qps || 0) * dt * c.autoInvestPct;
                         if (budget <= 0) return;
 
-                        const bondCost =
-                            c._naturalPrice(Date.now() / 1000) * c.unitCost;
+                        const bondCost = c._naturalPrice(Date.now() / 1000) * c.effectiveUnitCost();
                         s._autoAcc = (s._autoAcc || 0) + budget;
                         const accCap = bondCost * c.autoInvestAccCap;
                         if (s._autoAcc > accCap) s._autoAcc = accCap;
@@ -907,7 +921,7 @@ export const Config = (() => {
                         );
                         const elDiv = el("b", {}, "+0.00 Q/s");
                         const elValue = el("b", {}, "0 Q");
-
+                        const elCostMult = el("b", { id: "costMult" }, "×1.00" );
                         const elBuy1Cost = span(
                             { className: "amount" },
                             "100 Q"
@@ -1061,6 +1075,10 @@ export const Config = (() => {
                                         span({}, "Portfolio value"),
                                         elValue
                                     ]),
+                                    div({ className: "stat-row" }, [
+                                        span({}, "Cost multiplier"),
+                                        el("b", { id: "costMult" }, "×1.00")
+                                    ]),
                                     div({ className: "exchange-buttons" }, [
                                         div({ className: "exchange-row" }, [
                                             btnBuy1,
@@ -1190,9 +1208,9 @@ export const Config = (() => {
                             const now = Date.now() / 1000;
                             const displayPrice = c.price(now); // 0 during lock
                             const naturalPrice = c._naturalPrice(now); // true price
-                            const buyUnit = naturalPrice * c.unitCost;
-                            const sellUnit =
-                                naturalPrice * c.unitCost * (1 - c.spread);
+                            const unitCost = c.effectiveUnitCost();    // entropy-scaled
+                            const buyUnit = naturalPrice * unitCost;
+                            const sellUnit = naturalPrice * unitCost * (1 - c.spread);
 
                             elPrice.textContent =
                                 "Ⓠ " + Format.plain(displayPrice);
@@ -1206,6 +1224,9 @@ export const Config = (() => {
                                 "+" + Format.num(divRate) + " Q/s";
                             elValue.textContent =
                                 Format.num(held * buyUnit) + " Q";
+
+                            const costMult = unitCost / c.unitCost;
+                            elCostMult.textContent = "×" + Format.plain(costMult);
 
                             /* ---- GDP panel ---- */
                             const gdp = s.gdp || 0;
