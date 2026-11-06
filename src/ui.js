@@ -159,10 +159,12 @@ export const UI = (() => {
             { className: "wq-val", id: "waveQuality" },
             "×1.00"
         );
+        const boostChip = span({ className: "wq-boost", id: "waveBoost" }, "");
         const readout = div({ className: "wave-readout" }, [
             span({ className: "wq-label" }, "WAVE QUALITY"),
-            waveQuality
+            div({ className: "wq-right" }, [waveQuality, boostChip])
         ]);
+
         const collapseBtn = el(
             "button",
             { className: "collapse-btn", id: "collapseBtn" },
@@ -673,6 +675,7 @@ export const UI = (() => {
             entUnlocked ? 1 : 0,
             s.feat.tickRate,
             s.feat.collapseEcho,
+            s.portfolio?.holdings?.bonds || 0,
             featLines.map(l => l.text).join("¦")
         ].join("|");
         if (sig === lastFormulaSig) return;
@@ -795,7 +798,7 @@ export const UI = (() => {
 
         /* exchange pill */
         const exFeature = Features.get("exchange");
-        if (exFeature && exFeature.price && s.market?.everVisited) {
+        if (exFeature && exFeature.price && s.portfolio?.everVisited) {
             const pill = document.getElementById("exchangePill");
             if (pill) {
                 pill.classList.add("revealed");
@@ -807,10 +810,11 @@ export const UI = (() => {
             }
         }
 
-        const q = Wave.quality(t);
+        const qNorm = Wave.value(t);
+        const qVal = Wave.quality(t);
         const wq = $("#waveQuality");
-        wq.textContent = "×" + Format.plain(q);
-        wq.classList.toggle("hot", q > 0.9);
+        wq.textContent = "×" + Format.plain(qVal);
+        wq.classList.toggle("hot", qNorm > 0.88);
 
         const gain = Calc.coherenceGain(t);
         const cost = Calc.collapseCost();
@@ -818,8 +822,17 @@ export const UI = (() => {
         $("#collapseCost").textContent = Format.num(cost);
 
         const btn = $("#collapseBtn");
-        btn.classList.toggle("hot", q > 0.9);
+        btn.classList.toggle("hot", qNorm > 0.88);
         btn.classList.toggle("poor", s.quanta < cost);
+
+        const boost = Wave.entropyBoost();
+const boostEl = $("#waveBoost");
+if (boostEl) {
+    boostEl.textContent = boost > 0
+        ? "Ξ +" + (boost * 100).toFixed(0) + "%"
+        : "";
+    boostEl.classList.toggle("visible", boost > 0);
+}
     }
 
     function renderStats() {

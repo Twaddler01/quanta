@@ -7,8 +7,10 @@ import { toast } from "./toast.js";
 export const Save = (() => {
     const num = v => (Number.isFinite(+v) ? +v : 0);
     const clampInt = v => Math.max(0, Math.floor(num(v)));
+    let disabled = false;
 
     function write() {
+        if (disabled) return;
         const s = State.get();
         s.lastSave = Date.now();
         try {
@@ -50,10 +52,22 @@ export const Save = (() => {
             mod: Object.assign({}, def.mod, parsed.mod || {}),
             cUp: Object.assign({}, def.cUp, parsed.cUp || {}),
             feat: Object.assign({}, def.feat, parsed.feat || {}),
-            market: {
-                credits: clampInt(parsed.market?.credits ?? 0),
-                everVisited: !!parsed.market?.everVisited
+            portfolio: {
+                holdings: {
+                    bonds: clampInt(
+                        parsed.portfolio?.holdings?.bonds ??
+                            parsed.market?.credits ?? // migrate old credits
+                            0
+                    )
+                },
+                auto: {
+                    bonds: !!parsed.portfolio?.auto?.bonds
+                },
+                everVisited: !!(
+                    parsed.portfolio?.everVisited ?? parsed.market?.everVisited
+                )
             },
+            _autoAcc: num(parsed._autoAcc),
             _tickAcc: num(parsed._tickAcc)
         };
         for (const k in merged.up) merged.up[k] = clampInt(merged.up[k]);
@@ -118,5 +132,9 @@ export const Save = (() => {
         } catch (e) {}
     }
 
-    return { write, read, wipe };
+    function disable() {
+        disabled = true;
+    }
+
+    return { write, read, wipe, disable };
 })();

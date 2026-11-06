@@ -520,6 +520,17 @@ body {
     text-shadow: 0 0 14px rgba(77, 255, 166, 0.8);
 }
 
+.wq-right { display: inline-flex; align-items: baseline; gap: 8px; }
+.wq-boost {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--entropy);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+.wq-boost.visible { opacity: 1; }
+
 .collapse-btn {
     width: 100%;
     margin-top: 12px;
@@ -1063,4 +1074,16 @@ body {
 /* feature accent support in the formula panel */
 .f-feature.market {
     color: var(--market);
+}
+
+/* Auto-invest toggle states */
+.exchange-btn.on {
+    border-color: rgba(74, 222, 128, 0.8);
+    background: linear-gradient(180deg, rgba(74, 222, 128, 0.15), rgba(74, 222, 128, 0.02));
+    color: var(--market);
+    box-shadow: 0 0 16px rgba(74, 222, 128, 0.2);
+}
+.exchange-btn.locked {
+    opacity: 0.5;
+    cursor: not-allowed;
 }

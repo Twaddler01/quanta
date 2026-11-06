@@ -16,7 +16,11 @@ export const State = (() => {
             mod: { psi: 0, phi: 0, lam: 0 },
             cUp: { stab: 0, harm: 0, lock: 0 },
             feat: { tickRate: 0, collapseEcho: 0, exchange: 0 },
-            market: { credits: 0, everVisited: false }
+            portfolio: {
+                holdings: { bonds: 0 },
+                auto: { bonds: false },
+                everVisited: false
+            }
         };
     }
     let s = blank();

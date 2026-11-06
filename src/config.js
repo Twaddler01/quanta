@@ -124,7 +124,18 @@ export const Config = (() => {
         a3: 0.06,
         span: 3.2,
         floorStep: 0.08,
-        floorMax: 0.8
+        floorMax: 0.8,
+
+        /* Quality curve — the wave's raw contribution, before entropy */
+        qualityMin: 0.1, // trough
+        qualityMax: 1.0, // peak
+        /* ↑ Bump qualityMin to 0.20–0.30 for a friendlier early game before
+         entropy unlocks. Bump qualityMax to 1.20+ if you want the peak
+         to feel more "rewarding" even at entropy 0. */
+
+        /* Entropy scaling — quality × (1 + boost), boost capped */
+        entropyQualityPerPoint: 0.01, // +1% quality per point of entropy
+        maxEntropyQualityBoost: 10 // +1000% cap (quality max 11× base)
     };
 
     const SURGE = {
@@ -331,34 +342,47 @@ export const Config = (() => {
                 };
             }
         },
-        /* --- 3. Quantum Exchange --------------------------------
-   Buy Q-Credits low, sell them high. Prices cycle on
-   wall-clock time; entropy amplifies volatility. */
+        /* --- 3. Quantum Bond Fund --------------------------------
+   Buy bonds when cheap; hold for passive dividends that
+   compound with holdings and milestones. */
         exchange: {
             enabled: true,
             id: "exchange",
 
-            /* price curve */
+            /* price curve (unchanged from before) */
             basePrice: 1.0,
             priceAmp1: 0.35,
             priceAmp2: 0.15,
-            period1: 0.35, // rad/s
-            period2: 0.91, // rad/s
+            period1: 0.35,
+            period2: 0.91,
             phase2: 1.7,
             minPrice: 0.15,
             maxPrice: 3.0,
 
-            /* volatility scaled by entropy */
+            /* volatility amplifies with entropy */
             volatilityPerEntropy: 0.001,
             maxVolatility: 2.5,
 
-            /* unit economics */
-            unitCost: 100, // cost of 1 credit at P = 1.0
-            spread: 0.05, // sell price = P × unitCost × (1 − spread)
+            /* bond economics */
+            unitCost: 100, // Q per bond at P = 1.0
+            spread: 0.05, // sell at P × unitCost × (1 − spread)
+
+            /* dividend yield */
+            baseDividend: 2.0, // Q/s per bond, before milestones
+
+            milestones: [
+                { at: 10, divMult: 1.5, label: "dividend ×1.5" },
+                { at: 200, divMult: 2.5, label: "dividend ×2.5" }
+            ],
 
             /* capacity */
-            maxCreditsBase: 10,
-            maxCreditsPerLevel: 10,
+            baseCapacity: 100,
+            capacityPerLevel: 25,
+
+            /* auto-invest */
+            autoInvestUnlockAt: 25,
+            autoInvestPct: 0.1,
+            autoInvestAccCap: 5, // max bonds' worth of accumulated budget
 
             /* license card */
             levelCost: 2000,
@@ -384,23 +408,43 @@ export const Config = (() => {
             capacity() {
                 const c = FEATURES.exchange;
                 return (
-                    c.maxCreditsBase +
-                    c.maxCreditsPerLevel * (State.get().feat.exchange || 0)
+                    c.baseCapacity +
+                    c.capacityPerLevel * (State.get().feat.exchange || 0)
                 );
             },
 
-            ensureMarket() {
+            ensurePortfolio() {
                 const s = State.get();
-                if (!s.market) s.market = { credits: 0, everVisited: false };
-                return s.market;
+                if (!s.portfolio) {
+                    s.portfolio = {
+                        holdings: { bonds: 0 },
+                        auto: { bonds: false },
+                        everVisited: false
+                    };
+                }
+                if (!s.portfolio.holdings) s.portfolio.holdings = { bonds: 0 };
+                if (!s.portfolio.auto) s.portfolio.auto = { bonds: false };
+                return s.portfolio;
             },
 
-            buy(n) {
+            calcDividend() {
+                const c = FEATURES.exchange;
+                const holdings = State.get().portfolio?.holdings?.bonds || 0;
+                if (holdings === 0) return 0;
+                let mult = 1;
+                for (const ms of c.milestones) {
+                    if (holdings >= ms.at) mult *= ms.divMult;
+                }
+                return holdings * c.baseDividend * mult;
+            },
+
+            buyBonds(n) {
                 const c = FEATURES.exchange;
                 const s = State.get();
-                const m = FEATURES.exchange.ensureMarket();
+                const m = FEATURES.exchange.ensurePortfolio();
 
-                const space = Math.max(0, c.capacity() - m.credits);
+                const held = m.holdings.bonds || 0;
+                const space = Math.max(0, c.capacity() - held);
                 if (space <= 0) return { amount: 0, cost: 0 };
 
                 const unit = c.price(Date.now() / 1000) * c.unitCost;
@@ -410,16 +454,17 @@ export const Config = (() => {
 
                 const cost = unit * amount;
                 s.quanta -= cost;
-                m.credits += amount;
+                m.holdings.bonds = held + amount;
                 return { amount, cost };
             },
 
-            sell(n) {
+            sellBonds(n) {
                 const c = FEATURES.exchange;
                 const s = State.get();
-                const m = FEATURES.exchange.ensureMarket();
+                const m = FEATURES.exchange.ensurePortfolio();
 
-                const amount = Math.min(n, m.credits);
+                const held = m.holdings.bonds || 0;
+                const amount = Math.min(n, held);
                 if (amount <= 0) return { amount: 0, gain: 0 };
 
                 const unit =
@@ -427,32 +472,82 @@ export const Config = (() => {
                 const gain = unit * amount;
                 s.quanta += gain;
                 s.total += gain;
-                m.credits -= amount;
+                m.holdings.bonds = held - amount;
                 return { amount, gain };
             },
 
-            /* ----- card (shows in Upgrades tab) ----- */
+            /* ----- card ----- */
             cards: [
                 {
                     id: "exchange",
-                    name: "Exchange License",
+                    name: "Bond Fund License",
                     currency: "quanta",
-                    flavor: "Raises the maximum Q-Credits you can hold at once.",
+                    flavor: "Expands your bond portfolio's storage capacity.",
                     cost: lv =>
                         FEATURES.exchange.levelCost *
                         Math.pow(FEATURES.exchange.levelCostMult, lv),
                     effect: lv => {
                         const c = FEATURES.exchange;
-                        const now =
-                            c.maxCreditsBase + c.maxCreditsPerLevel * lv;
+                        const now = c.baseCapacity + c.capacityPerLevel * lv;
                         const nxt =
-                            c.maxCreditsBase + c.maxCreditsPerLevel * (lv + 1);
-                        return `${now} → ${nxt} credits`;
+                            c.baseCapacity + c.capacityPerLevel * (lv + 1);
+                        return `${now} → ${nxt} bonds`;
                     }
                 }
             ],
 
-            /* ----- view (auto-tabbed by UI) ----- */
+            /* ----- hooks ----- */
+            hooks: {
+                onTick(s, dt, ctx) {
+                    const holdings = s.portfolio?.holdings?.bonds || 0;
+                    const autoOn = !!s.portfolio?.auto?.bonds;
+                    if (holdings === 0 && !autoOn) return;
+
+                    if (holdings > 0) {
+                        const gain = FEATURES.exchange.calcDividend() * dt;
+                        s.quanta += gain;
+                        s.total += gain;
+                    }
+
+                    if (autoOn) {
+                        const c = FEATURES.exchange;
+                        const cap = c.capacity();
+                        if ((s.portfolio.holdings.bonds || 0) >= cap) return;
+
+                        const budget = (ctx.qps || 0) * dt * c.autoInvestPct;
+                        if (budget <= 0) return;
+
+                        const bondCost =
+                            c.price(Date.now() / 1000) * c.unitCost;
+                        s._autoAcc = (s._autoAcc || 0) + budget;
+                        const accCap = bondCost * c.autoInvestAccCap;
+                        if (s._autoAcc > accCap) s._autoAcc = accCap;
+
+                        while (
+                            s._autoAcc >= bondCost &&
+                            s.quanta >= bondCost &&
+                            (s.portfolio.holdings.bonds || 0) < cap
+                        ) {
+                            s._autoAcc -= bondCost;
+                            s.quanta -= bondCost;
+                            s.portfolio.holdings.bonds =
+                                (s.portfolio.holdings.bonds || 0) + 1;
+                        }
+                    }
+                }
+            },
+
+            /* ----- formula line ----- */
+            formula() {
+                const div = FEATURES.exchange.calcDividend();
+                if (div <= 0) return null;
+                return {
+                    text: `BONDS +${Format.num(div)} Q/s`,
+                    accent: "market"
+                };
+            },
+
+            /* ----- view ----- */
             views: [
                 {
                     id: "exchange",
@@ -468,8 +563,11 @@ export const Config = (() => {
                         );
                         const elHeld = span(
                             { className: "exchange-holdings" },
-                            "0 / 10"
+                            "0 / 100"
                         );
+                        const elDiv = el("b", {}, "+0.00 Q/s");
+                        const elValue = el("b", {}, "0 Q");
+
                         const elBuy1Cost = span(
                             { className: "amount" },
                             "100 Q"
@@ -483,13 +581,11 @@ export const Config = (() => {
                             { className: "amount" },
                             "—"
                         );
-                        const elCap = el("b", {}, "10");
-                        const elVol = el("b", {}, "×1.00");
 
                         const btnBuy1 = el(
                             "button",
                             { className: "exchange-btn buy" },
-                            ["BUY +1", elBuy1Cost]
+                            ["BUY 1", elBuy1Cost]
                         );
                         const btnBuyMax = el(
                             "button",
@@ -499,7 +595,7 @@ export const Config = (() => {
                         const btnSell1 = el(
                             "button",
                             { className: "exchange-btn sell" },
-                            ["SELL −1", elSell1Cost]
+                            ["SELL 1", elSell1Cost]
                         );
                         const btnSellAll = el(
                             "button",
@@ -513,7 +609,39 @@ export const Config = (() => {
                             id: "marketFloaters"
                         });
 
-                        /* ---- layout ---- */
+                        /* ---- auto-invest panel ---- */
+                        const autoBtn = el(
+                            "button",
+                            { className: "exchange-btn locked" },
+                            "AUTO-INVEST: LOCKED"
+                        );
+                        const autoHint = div(
+                            { className: "hint", style: { marginTop: "8px" } },
+                            `Unlocks at ${c.autoInvestUnlockAt} bonds.`
+                        );
+                        const autoPanel = div({ className: "panel" }, [
+                            div({ className: "panel-title" }, "Auto-Invest"),
+                            autoBtn,
+                            autoHint
+                        ]);
+
+                        /* ---- milestones ---- */
+                        const milestoneList = div({ className: "list" });
+                        const milestoneRows = [];
+                        for (const ms of c.milestones) {
+                            const row = div({ className: "milestone" }, [
+                                span({ className: "dot" }),
+                                span({ className: "label" }, ms.label),
+                                span({ className: "at" }, `${ms.at} bonds`)
+                            ]);
+                            milestoneList.appendChild(row);
+                            milestoneRows.push({ el: row, at: ms.at });
+                        }
+                        const milestonePanel = div({ className: "panel" }, [
+                            div({ className: "panel-title" }, "Milestones"),
+                            milestoneList
+                        ]);
+
                         const section = el(
                             "section",
                             {
@@ -527,7 +655,7 @@ export const Config = (() => {
                                 div({ className: "panel exchange-panel" }, [
                                     div(
                                         { className: "panel-title" },
-                                        "Quantum Exchange"
+                                        "Quantum Bond Fund"
                                     ),
                                     div({ className: "exchange-chart-wrap" }, [
                                         canvas,
@@ -536,6 +664,14 @@ export const Config = (() => {
                                     div({ className: "exchange-readout" }, [
                                         elPrice,
                                         elHeld
+                                    ]),
+                                    div({ className: "stat-row" }, [
+                                        span({}, "Dividend"),
+                                        elDiv
+                                    ]),
+                                    div({ className: "stat-row" }, [
+                                        span({}, "Portfolio value"),
+                                        elValue
                                     ]),
                                     div({ className: "exchange-buttons" }, [
                                         div({ className: "exchange-row" }, [
@@ -548,25 +684,13 @@ export const Config = (() => {
                                         ])
                                     ])
                                 ]),
-                                div({ className: "panel" }, [
-                                    div(
-                                        { className: "panel-title" },
-                                        "Market Telemetry"
-                                    ),
-                                    div({ className: "stat-row" }, [
-                                        span({}, "Max credits"),
-                                        elCap
-                                    ]),
-                                    div({ className: "stat-row" }, [
-                                        span({}, "Volatility"),
-                                        elVol
-                                    ])
-                                ]),
+                                autoPanel,
+                                milestonePanel,
                                 div(
                                     { className: "hint" },
-                                    "Buy credits when the price is low (green). Sell when it's high (gold). " +
-                                        "Prices cycle roughly every 18 seconds. Entropy amplifies volatility — " +
-                                        "bigger swings, bigger opportunity, bigger risk."
+                                    "Buy bonds when the price is low (green). Each bond pays passive Quanta every second — " +
+                                        "dividends scale with holdings and milestones. Entropy amplifies volatility. " +
+                                        "Prices cycle roughly every 18 seconds."
                                 )
                             ]
                         );
@@ -600,15 +724,14 @@ export const Config = (() => {
                                 if (!ctx) return;
                             }
                             const now = Date.now() / 1000;
-                            const SPAN = 20;
-                            const N = 80;
-                            const pad = 6;
+                            const SPAN = 20,
+                                N = 80,
+                                pad = 6;
                             const ih = H - pad * 2;
                             const range = c.maxPrice - c.minPrice;
 
                             ctx.clearRect(0, 0, W, H);
 
-                            /* baseline at P = 1 */
                             const midY =
                                 H - pad - ((1.0 - c.minPrice) / range) * ih;
                             ctx.beginPath();
@@ -630,7 +753,6 @@ export const Config = (() => {
                                 ];
                             }
 
-                            /* fill */
                             ctx.beginPath();
                             ctx.moveTo(0, H);
                             for (let i = 0; i <= N; i++)
@@ -643,10 +765,8 @@ export const Config = (() => {
                             ctx.fillStyle = grad;
                             ctx.fill();
 
-                            /* trace */
                             const cur = c.price(now);
-                            const isHigh = cur > 1.15;
-                            const color = isHigh ? "#ffd166" : "#4ade80";
+                            const color = cur > 1.15 ? "#ffd166" : "#4ade80";
                             ctx.beginPath();
                             ctx.moveTo(pts[0][0], pts[0][1]);
                             for (let i = 1; i <= N; i++)
@@ -659,7 +779,6 @@ export const Config = (() => {
                             ctx.stroke();
                             ctx.shadowBlur = 0;
 
-                            /* head marker */
                             const cy =
                                 H - pad - ((cur - c.minPrice) / range) * ih;
                             ctx.beginPath();
@@ -674,10 +793,10 @@ export const Config = (() => {
                         /* ---- render ---- */
                         function render() {
                             const s = State.get();
-                            const m = FEATURES.exchange.ensureMarket();
+                            const m = FEATURES.exchange.ensurePortfolio();
 
                             const max = c.capacity();
-                            const held = m.credits || 0;
+                            const held = m.holdings.bonds || 0;
                             const now = Date.now() / 1000;
                             const price = c.price(now);
                             const buyUnit = price * c.unitCost;
@@ -691,6 +810,12 @@ export const Config = (() => {
 
                             elPrice.textContent = "Ⓠ " + Format.plain(price);
                             elHeld.textContent = held + " / " + max;
+
+                            const divRate = FEATURES.exchange.calcDividend();
+                            elDiv.textContent =
+                                "+" + Format.num(divRate) + " Q/s";
+                            elValue.textContent =
+                                Format.num(held * buyUnit) + " Q";
 
                             elBuy1Cost.textContent = Format.num(buyUnit) + " Q";
                             elBuyMaxCost.textContent =
@@ -713,19 +838,34 @@ export const Config = (() => {
                             btnSellAll.classList.toggle("can", held >= 1);
                             btnSellAll.classList.toggle("poor", held < 1);
 
-                            elCap.textContent = String(max);
-                            const vol = Math.min(
-                                c.maxVolatility,
-                                1 + (s.entropy || 0) * c.volatilityPerEntropy
-                            );
-                            elVol.textContent = "×" + vol.toFixed(2);
+                            const autoUnlocked = held >= c.autoInvestUnlockAt;
+                            const autoOn = !!m.auto.bonds;
+                            if (autoUnlocked) {
+                                autoBtn.textContent = `AUTO-INVEST: ${autoOn ? "ON" : "OFF"}`;
+                                autoBtn.classList.toggle("on", autoOn);
+                                autoBtn.classList.remove("locked", "poor");
+                                autoHint.textContent = autoOn
+                                    ? `Diverting ${(c.autoInvestPct * 100).toFixed(0)}% of Q/s into bonds automatically.`
+                                    : `Toggle to divert ${(c.autoInvestPct * 100).toFixed(0)}% of your Q/s into bonds.`;
+                            } else {
+                                autoBtn.textContent = "AUTO-INVEST: LOCKED";
+                                autoBtn.classList.add("locked");
+                                autoBtn.classList.remove("on", "poor");
+                                autoHint.textContent =
+                                    `Unlocks at ${c.autoInvestUnlockAt} bonds ` +
+                                    `(${c.autoInvestUnlockAt - held} more).`;
+                            }
+
+                            for (const mr of milestoneRows) {
+                                mr.el.classList.toggle("done", held >= mr.at);
+                            }
 
                             drawChart();
                         }
 
                         /* ---- actions ---- */
                         function doBuy(n) {
-                            const r = FEATURES.exchange.buy(n);
+                            const r = FEATURES.exchange.buyBonds(n);
                             if (r.amount <= 0) return;
                             UI.floater(
                                 floaters,
@@ -741,7 +881,7 @@ export const Config = (() => {
                             Save.write();
                         }
                         function doSell(n) {
-                            const r = FEATURES.exchange.sell(n);
+                            const r = FEATURES.exchange.sellBonds(n);
                             if (r.amount <= 0) return;
                             UI.floater(
                                 floaters,
@@ -756,17 +896,26 @@ export const Config = (() => {
                             render();
                             Save.write();
                         }
+                        function toggleAuto() {
+                            const m = FEATURES.exchange.ensurePortfolio();
+                            if ((m.holdings.bonds || 0) < c.autoInvestUnlockAt)
+                                return;
+                            m.auto.bonds = !m.auto.bonds;
+                            render();
+                            Save.write();
+                        }
 
                         on(btnBuy1, "click", () => doBuy(1));
                         on(btnBuyMax, "click", () => doBuy(9999));
                         on(btnSell1, "click", () => doSell(1));
                         on(btnSellAll, "click", () => doSell(9999));
+                        on(autoBtn, "click", toggleAuto);
 
                         return {
                             element: section,
                             render,
                             onShow() {
-                                const m = FEATURES.exchange.ensureMarket();
+                                const m = FEATURES.exchange.ensurePortfolio();
                                 m.everVisited = true;
                                 document
                                     .getElementById("exchangePill")

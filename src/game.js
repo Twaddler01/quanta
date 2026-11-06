@@ -147,7 +147,8 @@ export const Game = (() => {
 
     function reset() {
         if (!confirm("Erase all progress and start over?")) return;
-        Save.wipe();
+        Save.disable();   // stop unload/pagehide/visibilitychange from re-saving
+        Save.wipe();      // now safely remove the key
         location.reload();
     }
 
@@ -264,7 +265,10 @@ export const Game = (() => {
         }
 
         /* 3. Feature ticks (may add quanta) */
-        Features.hook("onTick", s, dt, { tapGain: Calc.tapGain() });
+        Features.hook("onTick", s, dt, {
+            tapGain: Calc.tapGain(),
+            qps: Calc.effectiveQps()
+        });
 
         /* 4. Entropy */
         checkEntropyUnlock();
