@@ -1140,3 +1140,80 @@ body {
     0%, 100% { opacity: 0.65; }
     50%      { opacity: 1.00; }
 }
+
+/* Live breakdown table */
+.formula-table {
+    margin-bottom: 10px;
+    overflow-x: auto;
+}
+
+.breakdown-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--mono);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.breakdown-table tr.bd-head th {
+    text-align: left;
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    color: var(--dim);
+    text-transform: uppercase;
+    padding: 3px 6px 3px 0;
+    border-bottom: 1px solid var(--line);
+    font-weight: 600;
+}
+
+.breakdown-table tr.bd-main td {
+    padding: 5px 6px 5px 0;
+    color: #b9c7e6;
+    border-bottom: 1px dashed rgba(29, 41, 66, 0.4);
+}
+
+.breakdown-table tr.bd-sub td {
+    padding: 2px 6px 4px 0;
+    color: var(--surge);
+    font-size: 10px;
+    border-bottom: 1px dashed rgba(29, 41, 66, 0.4);
+}
+
+.breakdown-table tr.bd-sub td.bd-fin {
+    color: var(--surge);
+    font-weight: 700;
+}
+
+.breakdown-table tr.bd-main td.bd-fin {
+    color: var(--quanta);
+    font-weight: 700;
+    font-size: 12px;
+}
+
+.breakdown-table tr.bd-mult td {
+    padding: 3px 6px 3px 0;
+    color: var(--dim);
+    font-size: 10.5px;
+    border-bottom: 1px dashed rgba(29, 41, 66, 0.35);
+}
+
+.breakdown-table tr.bd-mult td.bd-num {
+    color: var(--quanta);
+}
+
+.breakdown-table tr.bd-sep td {
+    height: 6px;
+    padding: 0;
+    border-bottom: none;
+}
+
+.breakdown-table td.bd-num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.breakdown-table td:last-child,
+.breakdown-table th:last-child {
+    text-align: right;
+}

@@ -98,7 +98,8 @@ export const UI = (() => {
         const tapWrap = div({ className: "tapWrap" }, [tapBtn, floaters]);
 
         const formulaPanel = div({ className: "panel" }, [
-            div({ className: "panel-title" }, "Live Formula"),
+            div({ className: "panel-title" }, "Live Breakdown"),
+            div({ className: "formula-table", id: "formulaTable" }),
             div({ className: "formula", id: "formula" })
         ]);
 
@@ -595,65 +596,77 @@ export const UI = (() => {
         const s = State.get();
         const entUnlocked = Calc.entropyUnlocked();
         const entMult = Calc.entropyMult();
-        const entInt = entUnlocked ? Math.round(s.entropy || 0) : 0;
+
+        const tapRaw = Calc.rawTap();
+        const tapFin = Calc.tapGain();
+        const tapSurge = tapFin * Calc.surgeMult();
+
+        const autoRaw = Calc.rawAuto();
+        const autoFin = Calc.qps();
+        const autoSurge = Calc.effectiveQps();
+
+        const capTap = Calc.softcapThreshold("tap");
+        const capAuto = Calc.softcapThreshold("auto");
+
+        const surgeM = Calc.surgeMult();
+        const gdpM = Calc.gdpStateMult ? Calc.gdpStateMult() : 1;
+
+        /* --- multiplier rows --- */
+        const resM = Math.pow(Config.RESONANCE_BASE, s.up.resonance);
+        const phaseM = Math.pow(Config.PHASE_BASE, s.cUp.lock);
+
+        const multRows = [];
+        if (s.up.resonance > 0)
+            multRows.push(["Resonance", "×" + resM.toFixed(2), "✓", "✓"]);
+        if (s.cUp.lock > 0)
+            multRows.push(["Phase", "×" + phaseM.toFixed(2), "✓", "✓"]);
+        if (entUnlocked && entMult !== 1)
+            multRows.push(["Entropy", "×" + entMult.toFixed(2), "✓", "✓"]);
+        for (const m of Config.MODIFIERS) {
+            const lv = s.mod[m.id] || 0;
+            if (lv === 0) continue;
+            const mult = 1 + m.weight * lv;
+            const targets =
+                m.target === "all"
+                    ? ["✓", "✓"]
+                    : m.target === "tap"
+                      ? ["✓", "—"]
+                      : ["—", "✓"];
+            multRows.push([
+                m.sym + " lv " + lv,
+                "×" + mult.toFixed(2),
+                targets[0],
+                targets[1]
+            ]);
+        }
+        if (Math.abs(gdpM - 1) > 0.005)
+            multRows.push(["GDP", "×" + gdpM.toFixed(2), "✓", "✓"]);
+
+        /* --- channel rows --- */
+        const channelRows = [
+            ["Tap (raw → cap)", Format.num(tapRaw), Format.num(tapFin)]
+        ];
+        if (surgeM > 1.001)
+            channelRows.push([
+                "  └ Surge ×" + surgeM.toFixed(2),
+                "—",
+                Format.num(tapSurge)
+            ]);
+
+        channelRows.push([
+            "Passive (raw → cap)",
+            Format.num(autoRaw),
+            Format.num(autoFin)
+        ]);
+        if (surgeM > 1.001)
+            channelRows.push([
+                "  └ Surge ×" + surgeM.toFixed(2),
+                "—",
+                Format.num(autoSurge)
+            ]);
+
+        /* --- feature lines --- */
         const tapCtx = { tapGain: Calc.tapGain() };
-
-        const tT = ["(1+" + s.up.observer + ")"],
-            tV = [1 + s.up.observer];
-        for (const m of Config.MODIFIERS) {
-            if (m.target === "tap" || m.target === "all") {
-                const lv = s.mod[m.id] || 0;
-                if (lv > 0) {
-                    tT.push("(1+" + m.weight + "×" + lv + ")");
-                    tV.push(1 + m.weight * lv);
-                }
-            }
-        }
-        if (s.up.resonance > 0) {
-            tT.push("(1.25^" + s.up.resonance + ")");
-            tV.push(Math.pow(Config.RESONANCE_BASE, s.up.resonance));
-        }
-        if (s.cUp.lock > 0) {
-            tT.push("(1.15^" + s.cUp.lock + ")");
-            tV.push(Math.pow(Config.PHASE_BASE, s.cUp.lock));
-        }
-        if (entUnlocked && entMult !== 1) {
-            tT.push("Ξ" + Format.plain(entMult));
-            tV.push(entMult);
-        }
-        const tRaw = tV.reduce((a, b) => a * b, 1);
-        const tCap = Calc.softcapThreshold("tap");
-        const tFin = Calc.softcap(tRaw, "tap");
-
-        const aT = ["1.0", String(s.up.collector)],
-            aV = [1.0, s.up.collector];
-        for (const m of Config.MODIFIERS) {
-            if (m.target === "auto" || m.target === "all") {
-                const lv = s.mod[m.id] || 0;
-                if (lv > 0) {
-                    aT.push("(1+" + m.weight + "×" + lv + ")");
-                    aV.push(1 + m.weight * lv);
-                }
-            }
-        }
-        if (s.up.resonance > 0) {
-            aT.push("(1.25^" + s.up.resonance + ")");
-            aV.push(Math.pow(Config.RESONANCE_BASE, s.up.resonance));
-        }
-        if (s.cUp.lock > 0) {
-            aT.push("(1.15^" + s.cUp.lock + ")");
-            aV.push(Math.pow(Config.PHASE_BASE, s.cUp.lock));
-        }
-        if (entUnlocked && entMult !== 1) {
-            aT.push("Ξ" + Format.plain(entMult));
-            aV.push(entMult);
-        }
-        const aRaw = aV.reduce((a, b) => a * b, 1);
-        const aCap = Calc.softcapThreshold("auto");
-        const aFin = Calc.softcap(aRaw, "auto");
-
-        const surgeQ = Math.round((s.surge || 0) * 10) / 10;
-
         const featLines = [];
         for (const f of Features.all()) {
             if (!f.formula) continue;
@@ -661,106 +674,111 @@ export const UI = (() => {
             if (line?.text) featLines.push(line);
         }
 
+        /* --- signature to skip rebuild --- */
         const sig = [
-            s.up.observer,
-            s.up.collector,
-            s.up.resonance,
-            s.up.buffer,
-            s.mod.psi,
-            s.mod.phi,
-            s.mod.lam,
-            s.cUp.lock,
-            surgeQ,
-            entInt,
+            tapRaw,
+            tapFin,
+            autoRaw,
+            autoFin,
+            surgeM,
+            gdpM,
             entUnlocked ? 1 : 0,
-            s.feat.tickRate,
-            s.feat.collapseEcho,
-            s.portfolio?.holdings?.bonds || 0,
+            multRows.length,
+            channelRows.length,
             featLines.map(l => l.text).join("¦")
         ].join("|");
         if (sig === lastFormulaSig) return;
         lastFormulaSig = sig;
 
-        const children = [
-            div({}, [
-                span({ className: "f-k" }, "ΔQ/tap"),
-                " = " + tT.join(" × ")
-            ]),
-            div(
-                { className: "f-dim" },
-                NBSP + "= " + tV.map(Format.plain).join(" × ")
-            ),
-            div({ className: "f-res" }, NBSP + "= " + Format.num(tFin))
-        ];
-        if (tRaw > tCap)
-            children.push(
+        /* --- build table --- */
+        const table = el("table", { className: "breakdown-table" });
+
+        /* header row */
+        const head = el("tr", { className: "bd-head" }, [
+            el("th", {}, "Channel"),
+            el("th", {}, "Raw"),
+            el("th", {}, "Final")
+        ]);
+        table.appendChild(head);
+
+        for (const [label, raw, fin] of channelRows) {
+            const isSub = label.startsWith("  ");
+            const tr = el("tr", { className: isSub ? "bd-sub" : "bd-main" }, [
+                el("td", {}, label.trim()),
+                el("td", { className: "bd-num" }, raw),
+                el("td", { className: "bd-num bd-fin" }, fin)
+            ]);
+            table.appendChild(tr);
+        }
+
+        /* multiplier section */
+        if (multRows.length > 0) {
+            const sep = el("tr", { className: "bd-sep" }, [
+                el("td", { colSpan: 3 }, "")
+            ]);
+            table.appendChild(sep);
+
+            const mhead = el("tr", { className: "bd-head" }, [
+                el("th", {}, "Multiplier"),
+                el("th", {}, "Value"),
+                el("th", {}, "Tap · Auto")
+            ]);
+            table.appendChild(mhead);
+
+            for (const [name, val, tap, auto] of multRows) {
+                const tr = el("tr", { className: "bd-mult" }, [
+                    el("td", {}, name),
+                    el("td", { className: "bd-num" }, val),
+                    el("td", { className: "bd-num" }, tap + " · " + auto)
+                ]);
+                table.appendChild(tr);
+            }
+        }
+
+        $("#formulaTable").replaceChildren(table);
+
+        /* --- caps exceeded callouts --- */
+        const caps = [];
+        if (tapRaw > capTap)
+            caps.push(
                 div(
                     { className: "f-cap" },
-                    "softcap: " +
-                        Format.num(tRaw) +
-                        " exceeds cap " +
-                        Format.num(tCap) +
-                        " → " +
-                        Format.num(tFin)
+                    "TAP cap: raw " +
+                        Format.num(tapRaw) +
+                        " > threshold " +
+                        Format.num(capTap) +
+                        " → compressed"
                 )
             );
-        children.push(div({ className: "f-sep" }));
-        children.push(
-            div({}, [
-                span({ className: "f-k" }, "dQ/dt"),
-                NBSP + "= " + aT.join(" × ")
-            ])
-        );
-        children.push(
-            div({ className: "f-res" }, NBSP + "= " + Format.num(aFin) + " /s")
-        );
-        if (aRaw > aCap)
-            children.push(
+        if (autoRaw > capAuto)
+            caps.push(
                 div(
                     { className: "f-cap" },
-                    "softcap: " +
-                        Format.num(aRaw) +
-                        " exceeds cap " +
-                        Format.num(aCap) +
-                        " → " +
-                        Format.num(aFin)
+                    "AUTO cap: raw " +
+                        Format.num(autoRaw) +
+                        " > threshold " +
+                        Format.num(capAuto) +
+                        " → compressed"
                 )
             );
-        if ((s.surge || 0) > 0.01) {
-            const m = Calc.surgeMult();
-            children.push(
-                div(
-                    { className: "f-surge", style: { marginTop: "6px" } },
-                    "SURGE ×" +
-                        Format.plain(m) +
-                        "  →  dQ/dt = " +
-                        Format.num(aFin * m) +
-                        " /s"
-                )
-            );
-        }
-        if (entUnlocked && entMult !== 1) {
-            children.push(
-                div(
-                    { className: "f-entropy", style: { marginTop: "6px" } },
-                    "Ξ ×" + Format.plain(entMult) + "  applied to BOTH channels"
-                )
-            );
-        }
+
+        /* --- feature lines --- */
+        const featEls = [];
         for (const line of featLines) {
-            children.push(
+            featEls.push(
                 div(
                     {
                         className:
                             "f-feature" +
                             (line.accent ? " " + line.accent : ""),
-                        style: { marginTop: "6px" }
+                        style: { marginTop: "4px" }
                     },
                     line.text
                 )
             );
         }
-        $("#formula").replaceChildren(...children);
+
+        $("#formula").replaceChildren(...caps, ...featEls);
     }
 
     function renderSurge() {
@@ -789,8 +807,8 @@ export const UI = (() => {
         const t = clock();
 
         $("#quantaVal").textContent = Format.num(s.quanta);
-        $("#tapVal").textContent = "+" + Format.num(Calc.tapGain());
-        $("#qpsVal").textContent = "+" + Format.num(Calc.qps());
+        $("#tapVal").textContent = "+" + Format.num(Calc.tapGain() * Calc.surgeMult());
+        $("#qpsVal").textContent = "+" + Format.num(Calc.effectiveQps());
         $("#cohVal").textContent = Format.num(s.coherence);
 
         renderSurge();
