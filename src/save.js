@@ -68,7 +68,8 @@ export const Save = (() => {
                 )
             },
             _autoAcc: num(parsed._autoAcc),
-            _tickAcc: num(parsed._tickAcc)
+            _tickAcc: num(parsed._tickAcc),
+            gdp: num(parsed.gdp)
         };
         for (const k in merged.up) merged.up[k] = clampInt(merged.up[k]);
         for (const k in merged.mod) merged.mod[k] = clampInt(merged.mod[k]);
@@ -122,6 +123,11 @@ export const Save = (() => {
                     400
                 );
             }
+        }
+        /* GDP also grows offline */
+        const exchangeFeature = Config.FEATURES.exchange;
+        if (away > 1 && exchangeFeature?.gdpCatchUp) {
+            exchangeFeature.gdpCatchUp(merged, away);
         }
         return true;
     }

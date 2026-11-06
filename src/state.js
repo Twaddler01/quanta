@@ -20,7 +20,8 @@ export const State = (() => {
                 holdings: { bonds: 0 },
                 auto: { bonds: false },
                 everVisited: false
-            }
+            },
+            gdp: 0
         };
     }
     let s = blank();

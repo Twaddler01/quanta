@@ -388,6 +388,15 @@ export const Config = (() => {
             levelCost: 2000,
             levelCostMult: 5,
 
+            /* ===== NEW: Fictional GDP ===== */
+            gdp: {
+                baseRate: 1.0, // GDP/s baseline
+                perBondBonus: 0.01, // +1% rate per bond held
+                dividendCoefficient: 0.5, // mult = 1 + coef × log10(1 + GDP)
+                maxDividendBoost: 6, // cap on additive part (max mult = ×7)
+                entropyRateFactor: 0 // set to 0.001 to make entropy boost GDP rate
+            },
+
             /* ----- API ----- */
 
             price(t) {
@@ -435,6 +444,7 @@ export const Config = (() => {
                 for (const ms of c.milestones) {
                     if (holdings >= ms.at) mult *= ms.divMult;
                 }
+                mult *= FEATURES.exchange.gdpMultiplier();
                 return holdings * c.baseDividend * mult;
             },
 
@@ -476,6 +486,43 @@ export const Config = (() => {
                 return { amount, gain };
             },
 
+            gdpMultiplier() {
+                const c = FEATURES.exchange;
+                const gdp = State.get().gdp || 0;
+                const boost = Math.min(
+                    c.gdp.maxDividendBoost,
+                    c.gdp.dividendCoefficient * Math.log10(1 + gdp)
+                );
+                return 1 + boost;
+            },
+
+            gdpRate() {
+                const c = FEATURES.exchange;
+                const s = State.get();
+                const bonds = s.portfolio?.holdings?.bonds || 0;
+                const entropyFactor =
+                    1 + (s.entropy || 0) * c.gdp.entropyRateFactor;
+                return (
+                    c.gdp.baseRate *
+                    (1 + bonds * c.gdp.perBondBonus) *
+                    entropyFactor
+                );
+            },
+
+            gdpCatchUp(state, seconds) {
+                if (!(seconds > 0)) return;
+                if (!state.portfolio?.everVisited) return;
+                const c = FEATURES.exchange;
+                const bonds = state.portfolio?.holdings?.bonds || 0;
+                const entropyFactor =
+                    1 + (state.entropy || 0) * c.gdp.entropyRateFactor;
+                const rate =
+                    c.gdp.baseRate *
+                    (1 + bonds * c.gdp.perBondBonus) *
+                    entropyFactor;
+                state.gdp = (state.gdp || 0) + rate * seconds;
+            },
+
             /* ----- card ----- */
             cards: [
                 {
@@ -501,6 +548,9 @@ export const Config = (() => {
                 onTick(s, dt, ctx) {
                     const holdings = s.portfolio?.holdings?.bonds || 0;
                     const autoOn = !!s.portfolio?.auto?.bonds;
+
+                    FEATURES.exchange.gdpCatchUp(s, dt);
+
                     if (holdings === 0 && !autoOn) return;
 
                     if (holdings > 0) {
@@ -541,10 +591,12 @@ export const Config = (() => {
             formula() {
                 const div = FEATURES.exchange.calcDividend();
                 if (div <= 0) return null;
-                return {
-                    text: `BONDS +${Format.num(div)} Q/s`,
-                    accent: "market"
-                };
+                const gdpMult = FEATURES.exchange.gdpMultiplier();
+                let text = `BONDS +${Format.num(div)} Q/s`;
+                if (gdpMult > 1.005) {
+                    text += ` · GDP ×${gdpMult.toFixed(2)}`;
+                }
+                return { text, accent: "market" };
             },
 
             /* ----- view ----- */
@@ -567,6 +619,10 @@ export const Config = (() => {
                         );
                         const elDiv = el("b", {}, "+0.00 Q/s");
                         const elValue = el("b", {}, "0 Q");
+
+                        const elGdp = el("b", {}, "0");
+                        const elGdpRate = span({}, " (+0.00/s)");
+                        const elGdpMult = el("b", {}, "×1.00");
 
                         const elBuy1Cost = span(
                             { className: "amount" },
@@ -608,6 +664,15 @@ export const Config = (() => {
                             className: "floatHost",
                             id: "marketFloaters"
                         });
+
+                        const gdpRow = div({ className: "stat-row hidden" }, [
+                            span({}, "Economic Output"),
+                            el("b", {}, [elGdp, " ", elGdpRate])
+                        ]);
+                        const gdpMultRow = div(
+                            { className: "stat-row hidden" },
+                            [span({}, "GDP Dividend Bonus"), elGdpMult]
+                        );
 
                         /* ---- auto-invest panel ---- */
                         const autoBtn = el(
@@ -673,6 +738,8 @@ export const Config = (() => {
                                         span({}, "Portfolio value"),
                                         elValue
                                     ]),
+                                    gdpRow,
+                                    gdpMultRow,
                                     div({ className: "exchange-buttons" }, [
                                         div({ className: "exchange-row" }, [
                                             btnBuy1,
@@ -816,6 +883,24 @@ export const Config = (() => {
                                 "+" + Format.num(divRate) + " Q/s";
                             elValue.textContent =
                                 Format.num(held * buyUnit) + " Q";
+
+                            if (held > 0) {
+                                gdpRow.classList.remove("hidden");
+                                gdpMultRow.classList.remove("hidden");
+                                elGdp.textContent = Format.num(s.gdp || 0);
+                                elGdpRate.textContent =
+                                    " (+" +
+                                    Format.plain(FEATURES.exchange.gdpRate()) +
+                                    "/s)";
+                                elGdpMult.textContent =
+                                    "×" +
+                                    Format.plain(
+                                        FEATURES.exchange.gdpMultiplier()
+                                    );
+                            } else {
+                                gdpRow.classList.add("hidden");
+                                gdpMultRow.classList.add("hidden");
+                            }
 
                             elBuy1Cost.textContent = Format.num(buyUnit) + " Q";
                             elBuyMaxCost.textContent =

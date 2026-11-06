@@ -228,6 +228,10 @@ export const Game = (() => {
                     s.entropy +=
                         Calc.entropyRate() * Math.min(away, Config.OFFLINE_CAP);
                 }
+                const exchangeFeature = Config.FEATURES.exchange;
+                if (exchangeFeature?.gdpCatchUp) {
+                    exchangeFeature.gdpCatchUp(s, away);
+                }
             }
             lastWall = Date.now();
             lastFrame = performance.now();
