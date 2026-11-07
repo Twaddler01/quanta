@@ -76,7 +76,9 @@ export const Calc = (() => {
     function entropyMult() {
         if (!entropyUnlocked()) return 1;
         const e = State.get().entropy || 0;
-        return (1 + Config.ENTROPY.multPerEntropy * e) * entropyMultBonus();
+        const base = (1 + Config.ENTROPY.multPerEntropy * e) * entropyMultBonus();
+        const wave = Config.FEATURES?.exchange?.entropyWaveMult?.() ?? 1;
+        return base * wave;
     }
 
     function globalMult() {
@@ -88,11 +90,14 @@ export const Calc = (() => {
         );
     }
 
+    const waveMult = () => Config.FEATURES?.exchange?.waveMult?.() ?? 1;
+
     const rawTap = () =>
         (1 + State.get().up.observer) *
         channelMult("tap") *
         globalMult() *
-        gdpStateMult();
+        gdpStateMult() *
+        waveMult();
     const tapGain = () => softcap(rawTap(), "tap");
 
     const rawAuto = () =>
@@ -100,7 +105,8 @@ export const Calc = (() => {
         State.get().up.collector *
         channelMult("auto") *
         globalMult() *
-        gdpStateMult();
+        gdpStateMult() *
+        waveMult();
     const qps = () => softcap(rawAuto(), "auto");
     const coherenceBase = () =>
         Math.pow(Config.COHERENCE_BASE, State.get().cUp.harm);
@@ -127,6 +133,7 @@ export const Calc = (() => {
     return {
         featLevel,
         gdpStateMult,
+        waveMult,
         softcap,
         softcapThreshold,
         channelMult,

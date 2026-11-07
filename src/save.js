@@ -56,9 +56,12 @@ export const Save = (() => {
                 holdings: {
                     bonds: clampInt(
                         parsed.portfolio?.holdings?.bonds ??
-                            parsed.market?.credits ?? // migrate old credits
+                            parsed.market?.credits ??
                             0
                     )
+                },
+                costBasis: {
+                    bonds: num(parsed.portfolio?.costBasis?.bonds) || 0
                 },
                 auto: {
                     bonds: !!parsed.portfolio?.auto?.bonds
@@ -89,6 +92,19 @@ export const Save = (() => {
         ).length;
 
         State.replace(merged);
+
+        /* Migration: existing holders get neutral cost basis at current value */
+        {
+            const s = State.get();
+            const p = s.portfolio;
+            if (!p.costBasis) p.costBasis = { bonds: 0 };
+            const held = p.holdings.bonds || 0;
+            const cost = p.costBasis.bonds || 0;
+            if (held > 0 && cost === 0) {
+                const unit = Config.FEATURES.exchange.effectiveUnitCost();
+                p.costBasis.bonds = held * unit;   // assume neutral price 1.0
+            }
+        }
 
         /* --- Sanitize: any non-finite field becomes its safe default --- */
         {

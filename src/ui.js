@@ -53,6 +53,10 @@ export const UI = (() => {
                     span({ className: "k" }, "SURGE"),
                     span({ className: "v", id: "surgeVal" }, "×1.00")
                 ]),
+                div({ className: "pill wave", id: "wavePill" }, [
+                    span({ className: "k" }, "WAVE"),
+                    span({ className: "v", id: "waveVal" }, "×1.00")
+                ]),
                 div({ className: "pill ex", id: "exchangePill" }, [
                     span({ className: "k" }, "Ⓠ"),
                     span({ className: "v", id: "exchangePillVal" }, "1.00")
@@ -642,6 +646,16 @@ export const UI = (() => {
         if (Math.abs(gdpM - 1) > 0.005)
             multRows.push(["GDP", "×" + gdpM.toFixed(2), "✓", "✓"]);
 
+        const waveMultNow = Calc.waveMult();
+        if (Math.abs(waveMultNow - 1) > 0.005) {
+            multRows.push([
+                "Wave (position)",
+                "×" + waveMultNow.toFixed(2),
+                "✓",
+                "✓"
+            ]);
+        }
+
         /* --- channel rows --- */
         const channelRows = [
             ["Tap (raw → cap)", Format.num(tapRaw), Format.num(tapFin)]
@@ -807,11 +821,18 @@ export const UI = (() => {
         const t = clock();
 
         $("#quantaVal").textContent = Format.num(s.quanta);
-        $("#tapVal").textContent = "+" + Format.num(Calc.tapGain() * Calc.surgeMult());
+        $("#tapVal").textContent =
+            "+" + Format.num(Calc.tapGain() * Calc.surgeMult());
         $("#qpsVal").textContent = "+" + Format.num(Calc.effectiveQps());
         $("#cohVal").textContent = Format.num(s.coherence);
 
         renderSurge();
+
+        const waveM = Calc.waveMult();
+        $("#waveVal").textContent = "×" + Format.plain(waveM);
+        $("#wavePill").classList.toggle("up", waveM > 1.05);
+        $("#wavePill").classList.toggle("down", waveM < 0.95);
+
         renderEntropy();
 
         /* exchange pill */

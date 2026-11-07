@@ -426,6 +426,12 @@ export const Config = (() => {
                 entropyRateFactor: 0,
                 entropyCostFactor: 1.0,
                 maxUnitCostMult: 500,
+                waveExponent: 0.3,           // how strongly position affects income
+                waveMin: 0.5,                // floor when deep underwater
+                waveMax: 2.5,                // ceiling when sitting on big gains
+                entropyWaveExponent: 0.2,    // entropy responds more gently
+                entropyWaveMin: 0.7,
+                entropyWaveMax: 1.5,
                 milestones: [
                     {
                         at: 100,
@@ -505,7 +511,45 @@ export const Config = (() => {
                 }
                 if (!s.portfolio.holdings) s.portfolio.holdings = { bonds: 0 };
                 if (!s.portfolio.auto) s.portfolio.auto = { bonds: false };
+                if (!s.portfolio.costBasis)
+                    s.portfolio.costBasis = { bonds: 0 };
                 return s.portfolio;
+            },
+
+            /* how far current price is from your average buy price */
+            positionRatio() {
+                const s = State.get();
+                const p = s.portfolio;
+                const holdings = p?.holdings?.bonds || 0;
+                const cost = p?.costBasis?.bonds || 0;
+                if (holdings === 0 || cost === 0) return 1.0;
+
+                const unit = FEATURES.exchange.effectiveUnitCost();
+                const currentPrice = FEATURES.exchange._naturalPrice(
+                    Date.now() / 1000
+                );
+                const currentValue = holdings * currentPrice * unit;
+                return currentValue / cost;
+            },
+
+            waveMult() {
+                const c = FEATURES.exchange;
+                const ratio = FEATURES.exchange.positionRatio();
+                const exp = c.gdp.waveExponent ?? 0.3;
+                return Math.max(
+                    c.gdp.waveMin ?? 0.5,
+                    Math.min(c.gdp.waveMax ?? 2.5, Math.pow(ratio, exp))
+                );
+            },
+
+            entropyWaveMult() {
+                const c = FEATURES.exchange;
+                const ratio = FEATURES.exchange.positionRatio();
+                const exp = c.gdp.entropyWaveExponent ?? 0.2;
+                return Math.max(
+                    c.gdp.entropyWaveMin ?? 0.7,
+                    Math.min(c.gdp.entropyWaveMax ?? 1.5, Math.pow(ratio, exp))
+                );
             },
 
             calcDividend() {
@@ -517,6 +561,7 @@ export const Config = (() => {
                     if (holdings >= ms.at && ms.divMult) mult *= ms.divMult;
                 }
                 mult *= FEATURES.exchange.economyMult();
+                mult *= FEATURES.exchange.waveMult();
                 const result = holdings * c.baseDividend * mult;
                 return Number.isFinite(result) ? result : 0;
             },
@@ -531,8 +576,9 @@ export const Config = (() => {
                 const held = m.holdings.bonds || 0;
                 const space = Math.max(0, c.capacity() - held);
                 if (space <= 0) return { amount: 0, cost: 0 };
-                
-                const unit = c._naturalPrice(Date.now() / 1000) * c.effectiveUnitCost();
+
+                const unit =
+                    c._naturalPrice(Date.now() / 1000) * c.effectiveUnitCost();
                 const canAfford = Math.floor(s.quanta / unit);
                 const amount = Math.min(n, space, canAfford);
                 if (amount <= 0) return { amount: 0, cost: 0 };
@@ -540,6 +586,7 @@ export const Config = (() => {
                 const cost = unit * amount;
                 s.quanta -= cost;
                 m.holdings.bonds = held + amount;
+                m.costBasis.bonds = (m.costBasis.bonds || 0) + cost;
                 return { amount, cost };
             },
 
@@ -559,6 +606,15 @@ export const Config = (() => {
                 const gain = unit * amount;
                 s.quanta += gain;
                 s.total += gain;
+
+                /* Remove proportional cost basis for the sold bonds */
+                const avgCostPerBond =
+                    held > 0 ? (m.costBasis.bonds || 0) / held : 0;
+                m.costBasis.bonds = Math.max(
+                    0,
+                    (m.costBasis.bonds || 0) - avgCostPerBond * amount
+                );
+
                 m.holdings.bonds = held - amount;
                 return { amount, gain };
             },
@@ -680,10 +736,13 @@ export const Config = (() => {
 
                 /* Bonds always liquidate at market value — no cap, no multiplier */
                 const held = s.portfolio?.holdings?.bonds || 0;
-                const bondsValue = held > 0
-                    ? c._naturalPrice(Date.now() / 1000) *
-                      c.effectiveUnitCost() * (1 - c.spread) * held
-                    : 0;
+                const bondsValue =
+                    held > 0
+                        ? c._naturalPrice(Date.now() / 1000) *
+                          c.effectiveUnitCost() *
+                          (1 - c.spread) *
+                          held
+                        : 0;
 
                 /* GDP bonus grows superlinearly with hold time */
                 const gdpRaw = surplus * c.gdp.quantaPerGdp;
@@ -789,6 +848,7 @@ export const Config = (() => {
                     FEATURES.exchange.holdMult();
 
                 m.holdings.bonds = 0;
+                m.costBasis.bonds = 0;
                 s.gdp = c.gdp.baselineGdp;
                 s.quanta += totalPayout;
                 s.total += totalPayout;
@@ -858,7 +918,9 @@ export const Config = (() => {
                         const budget = (ctx.qps || 0) * dt * c.autoInvestPct;
                         if (budget <= 0) return;
 
-                        const bondCost = c._naturalPrice(Date.now() / 1000) * c.effectiveUnitCost();
+                        const bondCost =
+                            c._naturalPrice(Date.now() / 1000) *
+                            c.effectiveUnitCost();
                         s._autoAcc = (s._autoAcc || 0) + budget;
                         const accCap = bondCost * c.autoInvestAccCap;
                         if (s._autoAcc > accCap) s._autoAcc = accCap;
@@ -872,6 +934,8 @@ export const Config = (() => {
                             s.quanta -= bondCost;
                             s.portfolio.holdings.bonds =
                                 (s.portfolio.holdings.bonds || 0) + 1;
+                            s.portfolio.costBasis.bonds =
+                                (s.portfolio.costBasis.bonds || 0) + bondCost;
                         }
                     }
                 }
@@ -921,7 +985,9 @@ export const Config = (() => {
                         );
                         const elDiv = el("b", {}, "+0.00 Q/s");
                         const elValue = el("b", {}, "0 Q");
-                        const elCostMult = el("b", { id: "costMult" }, "×1.00" );
+                        const elWaveMult = el("b", {}, "×1.00");
+                        const elAvgCost = el("b", {}, "—");
+                        const elCostMult = el("b", { id: "costMult" }, "×1.00");
                         const elBuy1Cost = span(
                             { className: "amount" },
                             "100 Q"
@@ -975,7 +1041,10 @@ export const Config = (() => {
                             {},
                             "0 / " + c.gdp.milestones.length
                         );
-                        const elSellPayout = span({ className: "amount" }, "+0 Q");
+                        const elSellPayout = span(
+                            { className: "amount" },
+                            "+0 Q"
+                        );
                         const elHoldTime = el("b", {}, "0s");
 
                         const sellBtn = el(
@@ -1074,6 +1143,14 @@ export const Config = (() => {
                                     div({ className: "stat-row" }, [
                                         span({}, "Portfolio value"),
                                         elValue
+                                    ]),
+                                    div({ className: "stat-row" }, [
+                                        span({}, "Wave multiplier"),
+                                        elWaveMult
+                                    ]),
+                                    div({ className: "stat-row" }, [
+                                        span({}, "Avg cost / current"),
+                                        elAvgCost
                                     ]),
                                     div({ className: "stat-row" }, [
                                         span({}, "Cost multiplier"),
@@ -1208,9 +1285,10 @@ export const Config = (() => {
                             const now = Date.now() / 1000;
                             const displayPrice = c.price(now); // 0 during lock
                             const naturalPrice = c._naturalPrice(now); // true price
-                            const unitCost = c.effectiveUnitCost();    // entropy-scaled
+                            const unitCost = c.effectiveUnitCost(); // entropy-scaled
                             const buyUnit = naturalPrice * unitCost;
-                            const sellUnit = naturalPrice * unitCost * (1 - c.spread);
+                            const sellUnit =
+                                naturalPrice * unitCost * (1 - c.spread);
 
                             elPrice.textContent =
                                 "Ⓠ " + Format.plain(displayPrice);
@@ -1225,8 +1303,32 @@ export const Config = (() => {
                             elValue.textContent =
                                 Format.num(held * buyUnit) + " Q";
 
+                            const waveM = c.waveMult();
+                            const ratio = c.positionRatio();
+                            const avgCost =
+                                held > 0
+                                    ? (m.costBasis.bonds || 0) /
+                                      held /
+                                      c.effectiveUnitCost()
+                                    : 0;
+
+                            elWaveMult.textContent = "×" + Format.plain(waveM);
+                            elWaveMult.style.color =
+                                waveM > 1.05
+                                    ? "var(--good)"
+                                    : waveM < 0.95
+                                      ? "var(--surge)"
+                                      : "";
+                            elAvgCost.textContent =
+                                held > 0
+                                    ? Format.plain(avgCost) +
+                                      " → " +
+                                      Format.plain(naturalPrice)
+                                    : "—";
+
                             const costMult = unitCost / c.unitCost;
-                            elCostMult.textContent = "×" + Format.plain(costMult);
+                            elCostMult.textContent =
+                                "×" + Format.plain(costMult);
 
                             /* ---- GDP panel ---- */
                             const gdp = s.gdp || 0;

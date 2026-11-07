@@ -18,6 +18,7 @@ export const State = (() => {
             feat: { tickRate: 0, collapseEcho: 0, exchange: 0 },
             portfolio: {
                 holdings: { bonds: 0 },
+                costBasis: { bonds: 0 },
                 auto: { bonds: false },
                 everVisited: false
             },
