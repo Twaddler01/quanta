@@ -17,41 +17,6 @@ export const Game = (() => {
 
     /* ---------------- actions ---------------- */
 
-    function observe() {
-        const gain = Calc.tapGain();
-        const s = State.get();
-        s.quanta += gain;
-        s.total += gain;
-        s.taps += 1;
-        UI.floater(document.getElementById("floaters"), "+" + Format.num(gain));
-        if (navigator.vibrate) {
-            try {
-                navigator.vibrate(8);
-            } catch (e) {}
-        }
-    }
-
-    function consume() {
-        const s = State.get();
-        const cost = Calc.surgeCost();
-        if (s.quanta < cost) return;
-        const gain = Calc.surgeGain();
-        s.quanta -= cost;
-        s.surge = (s.surge || 0) + gain;
-        UI.floater(
-            document.getElementById("floaters"),
-            "+" + Format.plain(gain) + " surge",
-            "surge"
-        );
-        if (navigator.vibrate) {
-            try {
-                navigator.vibrate(10);
-            } catch (e) {}
-        }
-        UI.render();
-        Save.write();
-    }
-
     function collapse() {
         const s = State.get();
         const cost = Calc.collapseCost();
@@ -182,21 +147,6 @@ export const Game = (() => {
     /* ---------------- input ---------------- */
 
     function wireInputs() {
-        const tapBtn = document.getElementById("tapBtn");
-        on(tapBtn, "pointerdown", e => {
-            e.preventDefault();
-            tapBtn.classList.add("pressed");
-            observe();
-        });
-        const release = () => tapBtn.classList.remove("pressed");
-        on(tapBtn, "pointerup", release);
-        on(tapBtn, "pointercancel", release);
-        on(tapBtn, "pointerleave", release);
-
-        on(document.getElementById("consumeBtn"), "pointerdown", e => {
-            e.preventDefault();
-            consume();
-        });
         on(document.getElementById("collapseBtn"), "pointerdown", e => {
             e.preventDefault();
             collapse();
@@ -218,8 +168,7 @@ export const Game = (() => {
                 if (s.surge < 0.001) s.surge = 0;
             }
             if (away > 1) {
-                const g =
-                    Calc.effectiveQps() * Math.min(away, Config.OFFLINE_CAP);
+                const g = Calc.income() * Math.min(away, Config.OFFLINE_CAP);
                 if (g > 0) {
                     s.quanta += g;
                     s.total += g;
@@ -262,8 +211,7 @@ export const Game = (() => {
         }
 
         /* 2. Passive gain */
-        /* 2. Passive gain */
-        const passive = Calc.effectiveQps() * dt;
+        const passive = Calc.income() * dt;
         if (passive > 0 && Number.isFinite(passive)) {
             s.quanta += passive;
             s.total += passive;
@@ -275,8 +223,7 @@ export const Game = (() => {
 
         /* 3. Feature ticks (may add quanta) */
         Features.hook("onTick", s, dt, {
-            tapGain: Calc.tapGain(),
-            qps: Calc.effectiveQps()
+            income: Calc.income()
         });
 
         /* 4. Entropy */
@@ -311,5 +258,5 @@ export const Game = (() => {
         requestAnimationFrame(frame);
     }
 
-    return { boot, observe, consume, collapse, buy, reset };
+    return { boot, collapse, buy, reset };
 })();

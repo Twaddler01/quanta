@@ -66,16 +66,21 @@ window.QUANTA = {
         /* Note: feature views/tabs need a reload to appear/disappear. */
     },
     /** Convenience: current exchange price at time t (default: now). */
-    price(t) {
-        return Config.FEATURES.exchange.price(t ?? Date.now() / 1000);
+    price(marketId, t) {
+        const m = marketId || State.get().portfolio?.activeMarket || "calm";
+        return Config.FEATURES.exchange._naturalPrice(
+            m,
+            t ?? Date.now() / 1000
+        );
     },
     /** Simulate market: give 1M Q, buy max, wait for peak, sell all. */
     marketTest() {
         const s = State.get();
         s.quanta += 1_000_000;
         s.total += 1_000_000;
-        s.feat.exchange = 5; // 60 credits capacity
-        Config.FEATURES.exchange.buy(9999); // buy max
-        UI.toast("Bought " + s.market.credits + " credits");
+        s.feat.exchange = 5;
+        const active = s.portfolio?.activeMarket || "calm";
+        Config.FEATURES.exchange.buyBonds(active, 9999);
+        UI.toast("Bought max bonds in " + active);
     }
 };

@@ -52,30 +52,40 @@ export const Save = (() => {
             mod: Object.assign({}, def.mod, parsed.mod || {}),
             cUp: Object.assign({}, def.cUp, parsed.cUp || {}),
             feat: Object.assign({}, def.feat, parsed.feat || {}),
-            portfolio: {
-                holdings: {
-                    bonds: clampInt(
-                        parsed.portfolio?.holdings?.bonds ??
-                            parsed.market?.credits ??
-                            0
-                    )
-                },
-                costBasis: {
-                    bonds: num(parsed.portfolio?.costBasis?.bonds) || 0
-                },
-                auto: {
-                    bonds: !!parsed.portfolio?.auto?.bonds
-                },
-                everVisited: !!(
-                    parsed.portfolio?.everVisited ?? parsed.market?.everVisited
-                )
-            },
+            portfolio: (() => {
+                const p = parsed.portfolio || {};
+                const oldBonds =
+                    p.holdings?.bonds ?? parsed.market?.credits ?? 0;
+                return {
+                    holdings: {
+                        calm: clampInt(p.holdings?.calm ?? oldBonds),
+                        tidal: clampInt(p.holdings?.tidal ?? 0),
+                        vortex: clampInt(p.holdings?.vortex ?? 0),
+                        chaos: clampInt(p.holdings?.chaos ?? 0)
+                    },
+                    costBasis: {
+                        calm: num(p.costBasis?.calm ?? p.costBasis?.bonds ?? 0),
+                        tidal: num(p.costBasis?.tidal ?? 0),
+                        vortex: num(p.costBasis?.vortex ?? 0),
+                        chaos: num(p.costBasis?.chaos ?? 0)
+                    },
+                    auto: {
+                        calm: !!p.auto?.calm,
+                        tidal: !!p.auto?.tidal,
+                        vortex: !!p.auto?.vortex,
+                        chaos: !!p.auto?.chaos
+                    },
+                    activeMarket: p.activeMarket || "calm",
+                    everVisited: !!(p.everVisited ?? parsed.market?.everVisited)
+                };
+            })(),
             _autoAcc: num(parsed._autoAcc),
             _tickAcc: num(parsed._tickAcc),
             gdp: num(parsed.gdp),
             _waveLockUntil: num(parsed._waveLockUntil),
             _cashOutCooldownUntil: num(parsed._cashOutCooldownUntil),
-            _lastCashOutAt: num(parsed._lastCashOutAt) || num(parsed.start) || Date.now()
+            _lastCashOutAt:
+                num(parsed._lastCashOutAt) || num(parsed.start) || Date.now()
         };
         for (const k in merged.up) merged.up[k] = clampInt(merged.up[k]);
         for (const k in merged.mod) merged.mod[k] = clampInt(merged.mod[k]);
@@ -102,7 +112,7 @@ export const Save = (() => {
             const cost = p.costBasis.bonds || 0;
             if (held > 0 && cost === 0) {
                 const unit = Config.FEATURES.exchange.effectiveUnitCost();
-                p.costBasis.bonds = held * unit;   // assume neutral price 1.0
+                p.costBasis.bonds = held * unit; // assume neutral price 1.0
             }
         }
 
@@ -139,7 +149,7 @@ export const Save = (() => {
         }
 
         if (away > 5) {
-            const gain = Calc.effectiveQps() * away;
+            const gain = Calc.income() * away;
             if (gain > 0) {
                 const s = State.get();
                 s.quanta += gain;

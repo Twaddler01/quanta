@@ -14,22 +14,9 @@ export const Config = (() => {
     const PHASE_BASE = 1.15;
     const COHERENCE_BASE = 1.8;
     const OFFLINE_CAP = 8 * 3600;
+    const BASE_INCOME = 1.0; // Q/s floor — prevents softlock
 
     const UPGRADES = [
-        {
-            id: "observer",
-            name: "Observer Precision",
-            flavor: "Sharper measurement collapses the wavefunction into more quanta.",
-            cost: lv => 10 * Math.pow(1.55, lv),
-            effect: lv => "+" + lv + " base observation yield"
-        },
-        {
-            id: "collector",
-            name: "Vacuum Collector",
-            flavor: "Drone lattices siphon zero-point fluctuations automatically.",
-            cost: lv => 25 * Math.pow(1.62, lv),
-            effect: lv => "+" + Format.num(1.0 * lv) + " Q/s"
-        },
         {
             id: "resonance",
             name: "Resonance Cascade",
@@ -349,27 +336,15 @@ export const Config = (() => {
             enabled: true,
             id: "exchange",
 
-            /* price curve (unchanged from before) */
-            basePrice: 1.0,
-            priceAmp1: 0.35,
-            priceAmp2: 0.15,
-            period1: 0.35,
-            period2: 0.91,
-            phase2: 1.7,
-            minPrice: 0.15,
-            maxPrice: 3.0,
-
-            /* volatility amplifies with entropy */
+            /* shared price shaping */
             volatilityPerEntropy: 0.001,
             maxVolatility: 2.5,
 
-            /* bond economics */
-            unitCost: 100, // Q per bond at P = 1.0
-            spread: 0.05, // sell at P × unitCost × (1 − spread)
+            /* unit economics */
+            unitCost: 100,
+            spread: 0.05,
 
-            /* dividend yield */
-            baseDividend: 0.05, // Q/s per bond, before milestones
-
+            /* cross-market milestones */
             milestones: [
                 {
                     at: 10,
@@ -379,38 +354,94 @@ export const Config = (() => {
                 },
                 {
                     at: 200,
-                    divMult: 2,
+                    divMult: 2.0,
                     gdpRateMult: 1.5,
                     label: "dividend ×2 · GDP growth ×1.5"
                 },
                 {
                     at: 300,
-                    divMult: 1,
-                    gdpRateMult: 3,
+                    divMult: 1.0,
+                    gdpRateMult: 3.0,
                     label: "GDP growth ×3"
                 },
                 {
                     at: 350,
-                    divMult: 1,
-                    gdpRateMult: 4,
+                    divMult: 1.0,
+                    gdpRateMult: 4.0,
                     label: "GDP growth ×4"
                 }
             ],
 
-            /* capacity */
-            baseCapacity: 100,
-            capacityPerLevel: 25,
+            markets: [
+                {
+                    id: "calm",
+                    name: "Calm Waters",
+                    desc: "Smooth predictable cycles.",
+                    waveBase: 1.0,
+                    waveAmps: [0.3],
+                    waveOmegas: [0.31],
+                    wavePhases: [0.0],
+                    minPrice: 0.7,
+                    maxPrice: 1.3,
+                    baseDividend: 0.2,
+                    baseCapacity: 30,
+                    capacityPerLevel: 8,
+                    unlockAt: 0
+                },
+                {
+                    id: "tidal",
+                    name: "Turbulent Tides",
+                    desc: "Two interlocking waves.",
+                    waveBase: 1.0,
+                    waveAmps: [0.35, 0.2],
+                    waveOmegas: [0.31, 0.73],
+                    wavePhases: [0.0, 1.2],
+                    minPrice: 0.45,
+                    maxPrice: 1.55,
+                    baseDividend: 0.4,
+                    baseCapacity: 25,
+                    capacityPerLevel: 6,
+                    unlockAt: 100000
+                },
+                {
+                    id: "vortex",
+                    name: "Volatile Vortex",
+                    desc: "Three waves. Real losses possible.",
+                    waveBase: 1.0,
+                    waveAmps: [0.4, 0.25, 0.15],
+                    waveOmegas: [0.4, 1.1, 2.3],
+                    wavePhases: [0.0, 1.2, 2.7],
+                    minPrice: 0.2,
+                    maxPrice: 1.8,
+                    baseDividend: 0.8,
+                    baseCapacity: 20,
+                    capacityPerLevel: 4,
+                    unlockAt: 10000000
+                },
+                {
+                    id: "chaos",
+                    name: "Chaos Field",
+                    desc: "No clean pattern.",
+                    waveBase: 1.0,
+                    waveAmps: [0.45, 0.3, 0.2, 0.1],
+                    waveOmegas: [0.3, 0.7, 1.3, 2.9],
+                    wavePhases: [0.0, 0.5, 1.9, 3.7],
+                    minPrice: 0.1,
+                    maxPrice: 2.0,
+                    baseDividend: 1.6,
+                    baseCapacity: 15,
+                    capacityPerLevel: 3,
+                    unlockAt: 1000000000
+                }
+            ],
 
-            /* auto-invest */
             autoInvestUnlockAt: 25,
             autoInvestPct: 0.1,
-            autoInvestAccCap: 5, // max bonds' worth of accumulated budget
+            autoInvestAccCap: 5,
 
-            /* license card */
             levelCost: 2000,
             levelCostMult: 5,
 
-            /* ===== NEW: Fictional GDP ===== */
             gdp: {
                 baseRate: 1.0,
                 perBondBonus: 0.01,
@@ -420,16 +451,16 @@ export const Config = (() => {
                 maxStateMult: 5.0,
                 quantaPerGdp: 50,
                 waveLockSeconds: 8,
-                requireBondsForGrowth: true, // GDP rate scales with bonds; 0 bonds = 0 growth
-                minBondsForCashOutPct: 1.0, // must be at full capacity (lower to 0.75 for lenient)
-                cashOutCooldownSeconds: 30, // min time between cash outs
+                requireBondsForGrowth: true,
+                minBondsForCashOutPct: 1.0,
+                cashOutCooldownSeconds: 30,
                 entropyRateFactor: 0,
                 entropyCostFactor: 1.0,
                 maxUnitCostMult: 500,
-                waveExponent: 0.3,           // how strongly position affects income
-                waveMin: 0.5,                // floor when deep underwater
-                waveMax: 2.5,                // ceiling when sitting on big gains
-                entropyWaveExponent: 0.2,    // entropy responds more gently
+                waveExponent: 0.3,
+                waveMin: 0.5,
+                waveMax: 2.5,
+                entropyWaveExponent: 0.2,
                 entropyWaveMin: 0.7,
                 entropyWaveMax: 1.5,
                 milestones: [
@@ -456,26 +487,38 @@ export const Config = (() => {
                 ]
             },
 
-            /* ----- API ----- */
+            /* ---------- API ---------- */
 
-            price(t) {
-                if (Date.now() < (State.get()._waveLockUntil || 0)) return 0;
-                return FEATURES.exchange._naturalPrice(t);
+            _marketFor(id) {
+                return FEATURES.exchange.markets.find(m => m.id === id);
             },
 
-            _naturalPrice(t) {
+            _naturalPrice(marketId, t) {
                 const c = FEATURES.exchange;
+                const m = c._marketFor(marketId);
+                if (!m) return 1.0;
                 const ent = State.get().entropy || 0;
                 const vol = Math.min(
                     c.maxVolatility,
                     1 + ent * c.volatilityPerEntropy
                 );
-                const raw =
-                    c.basePrice +
-                    (c.priceAmp1 * Math.sin(t * c.period1) +
-                        c.priceAmp2 * Math.sin(t * c.period2 + c.phase2)) *
-                        vol;
-                return Math.max(c.minPrice, Math.min(c.maxPrice, raw));
+                let raw = m.waveBase;
+                for (let i = 0; i < m.waveAmps.length; i++) {
+                    raw +=
+                        m.waveAmps[i] *
+                        Math.sin(t * m.waveOmegas[i] + m.wavePhases[i]);
+                }
+                const price = m.waveBase + (raw - m.waveBase) * vol;
+                return Math.max(m.minPrice, Math.min(m.maxPrice, price));
+            },
+
+            price(marketId, t) {
+                if (Date.now() < (State.get()._waveLockUntil || 0)) return 0;
+                return FEATURES.exchange._naturalPrice(marketId, t);
+            },
+
+            isLocked() {
+                return Date.now() < (State.get()._waveLockUntil || 0);
             },
 
             effectiveUnitCost() {
@@ -488,165 +531,193 @@ export const Config = (() => {
                 return c.unitCost * factor;
             },
 
-            isLocked() {
-                return Date.now() < (State.get()._waveLockUntil || 0);
+            capacityFor(market) {
+                const level = State.get().feat.exchange || 0;
+                return market.baseCapacity + market.capacityPerLevel * level;
             },
 
-            capacity() {
-                const c = FEATURES.exchange;
-                return (
-                    c.baseCapacity +
-                    c.capacityPerLevel * (State.get().feat.exchange || 0)
-                );
+            totalBonds() {
+                const p = State.get().portfolio;
+                if (!p?.holdings) return 0;
+                let n = 0;
+                for (const k in p.holdings) n += p.holdings[k] || 0;
+                return n;
             },
 
             ensurePortfolio() {
                 const s = State.get();
                 if (!s.portfolio) {
                     s.portfolio = {
-                        holdings: { bonds: 0 },
-                        auto: { bonds: false },
+                        holdings: {},
+                        costBasis: {},
+                        auto: {},
+                        activeMarket: "calm",
                         everVisited: false
                     };
                 }
-                if (!s.portfolio.holdings) s.portfolio.holdings = { bonds: 0 };
-                if (!s.portfolio.auto) s.portfolio.auto = { bonds: false };
-                if (!s.portfolio.costBasis)
-                    s.portfolio.costBasis = { bonds: 0 };
+                if (!s.portfolio.holdings) s.portfolio.holdings = {};
+                if (!s.portfolio.costBasis) s.portfolio.costBasis = {};
+                if (!s.portfolio.auto) s.portfolio.auto = {};
+                if (!s.portfolio.activeMarket)
+                    s.portfolio.activeMarket = "calm";
+                for (const m of FEATURES.exchange.markets) {
+                    if (s.portfolio.holdings[m.id] === undefined)
+                        s.portfolio.holdings[m.id] = 0;
+                    if (s.portfolio.costBasis[m.id] === undefined)
+                        s.portfolio.costBasis[m.id] = 0;
+                    if (s.portfolio.auto[m.id] === undefined)
+                        s.portfolio.auto[m.id] = false;
+                }
                 return s.portfolio;
             },
 
-            /* how far current price is from your average buy price */
-            positionRatio() {
-                const s = State.get();
-                const p = s.portfolio;
-                const holdings = p?.holdings?.bonds || 0;
-                const cost = p?.costBasis?.bonds || 0;
-                if (holdings === 0 || cost === 0) return 1.0;
-
-                const unit = FEATURES.exchange.effectiveUnitCost();
-                const currentPrice = FEATURES.exchange._naturalPrice(
-                    Date.now() / 1000
-                );
-                const currentValue = holdings * currentPrice * unit;
-                return currentValue / cost;
-            },
-
-            waveMult() {
+            calcDividend(marketId) {
                 const c = FEATURES.exchange;
-                const ratio = FEATURES.exchange.positionRatio();
-                const exp = c.gdp.waveExponent ?? 0.3;
-                return Math.max(
-                    c.gdp.waveMin ?? 0.5,
-                    Math.min(c.gdp.waveMax ?? 2.5, Math.pow(ratio, exp))
-                );
-            },
-
-            entropyWaveMult() {
-                const c = FEATURES.exchange;
-                const ratio = FEATURES.exchange.positionRatio();
-                const exp = c.gdp.entropyWaveExponent ?? 0.2;
-                return Math.max(
-                    c.gdp.entropyWaveMin ?? 0.7,
-                    Math.min(c.gdp.entropyWaveMax ?? 1.5, Math.pow(ratio, exp))
-                );
-            },
-
-            calcDividend() {
-                const c = FEATURES.exchange;
-                const holdings = State.get().portfolio?.holdings?.bonds || 0;
+                const p = State.get().portfolio;
+                const holdings = p?.holdings?.[marketId] || 0;
                 if (holdings === 0) return 0;
+                const m = c._marketFor(marketId);
+                if (!m) return 0;
                 let mult = 1;
-                for (const ms of c.milestones) {
-                    if (holdings >= ms.at && ms.divMult) mult *= ms.divMult;
-                }
-                mult *= FEATURES.exchange.economyMult();
-                mult *= FEATURES.exchange.waveMult();
-                const result = holdings * c.baseDividend * mult;
+                const total = c.totalBonds();
+                for (const ms of c.milestones)
+                    if (total >= ms.at && ms.divMult) mult *= ms.divMult;
+                mult *= c.economyMult();
+                mult *= c.waveMult();
+                const result = holdings * m.baseDividend * mult;
                 return Number.isFinite(result) ? result : 0;
             },
 
-            buyBonds(n) {
+            totalDividends() {
+                const p = State.get().portfolio;
+                if (!p) return 0;
+                let sum = 0;
+                for (const m of FEATURES.exchange.markets)
+                    sum += FEATURES.exchange.calcDividend(m.id);
+                return sum;
+            },
+
+            buyBonds(marketId, n) {
                 const c = FEATURES.exchange;
                 const s = State.get();
                 if (Date.now() < (s._waveLockUntil || 0))
                     return { amount: 0, cost: 0, locked: true };
-                const m = FEATURES.exchange.ensurePortfolio();
-
-                const held = m.holdings.bonds || 0;
-                const space = Math.max(0, c.capacity() - held);
+                const p = c.ensurePortfolio();
+                const market = c._marketFor(marketId);
+                if (!market) return { amount: 0, cost: 0 };
+                const held = p.holdings[marketId] || 0;
+                const cap = c.capacityFor(market);
+                const space = Math.max(0, cap - held);
                 if (space <= 0) return { amount: 0, cost: 0 };
-
                 const unit =
-                    c._naturalPrice(Date.now() / 1000) * c.effectiveUnitCost();
+                    c._naturalPrice(marketId, Date.now() / 1000) *
+                    c.effectiveUnitCost();
                 const canAfford = Math.floor(s.quanta / unit);
                 const amount = Math.min(n, space, canAfford);
                 if (amount <= 0) return { amount: 0, cost: 0 };
-
                 const cost = unit * amount;
                 s.quanta -= cost;
-                m.holdings.bonds = held + amount;
-                m.costBasis.bonds = (m.costBasis.bonds || 0) + cost;
+                p.holdings[marketId] = held + amount;
+                p.costBasis[marketId] = (p.costBasis[marketId] || 0) + cost;
                 return { amount, cost };
             },
 
-            sellBonds(n) {
+            sellBonds(marketId, n) {
                 const c = FEATURES.exchange;
                 const s = State.get();
-                const m = FEATURES.exchange.ensurePortfolio();
-
-                const held = m.holdings.bonds || 0;
+                const p = c.ensurePortfolio();
+                const held = p.holdings[marketId] || 0;
                 const amount = Math.min(n, held);
                 if (amount <= 0) return { amount: 0, gain: 0 };
-
                 const unit =
-                    c._naturalPrice(Date.now() / 1000) *
+                    c._naturalPrice(marketId, Date.now() / 1000) *
                     c.effectiveUnitCost() *
                     (1 - c.spread);
                 const gain = unit * amount;
                 s.quanta += gain;
                 s.total += gain;
-
-                /* Remove proportional cost basis for the sold bonds */
-                const avgCostPerBond =
-                    held > 0 ? (m.costBasis.bonds || 0) / held : 0;
-                m.costBasis.bonds = Math.max(
+                const avgCost =
+                    held > 0 ? (p.costBasis[marketId] || 0) / held : 0;
+                p.costBasis[marketId] = Math.max(
                     0,
-                    (m.costBasis.bonds || 0) - avgCostPerBond * amount
+                    (p.costBasis[marketId] || 0) - avgCost * amount
                 );
-
-                m.holdings.bonds = held - amount;
+                p.holdings[marketId] = held - amount;
                 return { amount, gain };
             },
+
+            /* ---- position / wave ---- */
+
+            positionRatio() {
+                const c = FEATURES.exchange;
+                const p = State.get().portfolio;
+                if (!p) return 1.0;
+                const unit = c.effectiveUnitCost();
+                const now = Date.now() / 1000;
+                let totalCost = 0,
+                    totalValue = 0;
+                for (const m of c.markets) {
+                    const held = p.holdings?.[m.id] || 0;
+                    const cost = p.costBasis?.[m.id] || 0;
+                    if (held === 0 || cost === 0) continue;
+                    totalCost += cost;
+                    totalValue += held * c._naturalPrice(m.id, now) * unit;
+                }
+                if (totalCost === 0) return 1.0;
+                return totalValue / totalCost;
+            },
+
+            waveMult() {
+                const c = FEATURES.exchange;
+                const r = c.positionRatio();
+                return Math.max(
+                    c.gdp.waveMin,
+                    Math.min(c.gdp.waveMax, Math.pow(r, c.gdp.waveExponent))
+                );
+            },
+
+            entropyWaveMult() {
+                const c = FEATURES.exchange;
+                const r = c.positionRatio();
+                return Math.max(
+                    c.gdp.entropyWaveMin,
+                    Math.min(
+                        c.gdp.entropyWaveMax,
+                        Math.pow(r, c.gdp.entropyWaveExponent)
+                    )
+                );
+            },
+
+            /* ---- GDP ---- */
 
             bondGdpRateMult(state) {
                 const c = FEATURES.exchange;
                 const src = state || State.get();
-                const holdings = src.portfolio?.holdings?.bonds || 0;
+                const p = src.portfolio;
+                let total = 0;
+                if (p?.holdings)
+                    for (const k in p.holdings) total += p.holdings[k] || 0;
                 let m = 1;
-                for (const ms of c.milestones) {
-                    if (holdings >= ms.at && ms.gdpRateMult)
-                        m *= ms.gdpRateMult;
-                }
+                for (const ms of c.milestones)
+                    if (total >= ms.at && ms.gdpRateMult) m *= ms.gdpRateMult;
                 return m;
             },
 
             gdpRate() {
                 const c = FEATURES.exchange;
                 const s = State.get();
-                const bonds = s.portfolio?.holdings?.bonds || 0;
+                const bonds = c.totalBonds();
                 if (c.gdp.requireBondsForGrowth && bonds <= 0) return 0;
                 const bondFactor = c.gdp.requireBondsForGrowth
                     ? bonds * c.gdp.perBondBonus
                     : 1 + bonds * c.gdp.perBondBonus;
                 const entropyFactor =
                     1 + (s.entropy || 0) * c.gdp.entropyRateFactor;
-                const milestoneFactor = FEATURES.exchange.bondGdpRateMult();
                 return (
                     c.gdp.baseRate *
                     bondFactor *
                     entropyFactor *
-                    milestoneFactor
+                    c.bondGdpRateMult()
                 );
             },
 
@@ -654,20 +725,21 @@ export const Config = (() => {
                 if (!(seconds > 0)) return;
                 if (!state.portfolio?.everVisited) return;
                 const c = FEATURES.exchange;
-                const bonds = state.portfolio?.holdings?.bonds || 0;
+                let bonds = 0;
+                if (state.portfolio?.holdings)
+                    for (const k in state.portfolio.holdings)
+                        bonds += state.portfolio.holdings[k] || 0;
                 if (c.gdp.requireBondsForGrowth && bonds <= 0) return;
                 const bondFactor = c.gdp.requireBondsForGrowth
                     ? bonds * c.gdp.perBondBonus
                     : 1 + bonds * c.gdp.perBondBonus;
                 const entropyFactor =
                     1 + (state.entropy || 0) * c.gdp.entropyRateFactor;
-                const milestoneFactor =
-                    FEATURES.exchange.bondGdpRateMult(state);
                 const rate =
                     c.gdp.baseRate *
                     bondFactor *
                     entropyFactor *
-                    milestoneFactor;
+                    c.bondGdpRateMult(state);
                 state.gdp = (state.gdp || 0) + rate * seconds;
             },
 
@@ -697,9 +769,8 @@ export const Config = (() => {
             gdpCoefficient() {
                 const c = FEATURES.exchange;
                 let coef = c.gdp.stateCoefficient;
-                for (const ms of c.gdp.milestones) {
+                for (const ms of c.gdp.milestones)
                     if ((State.get().gdp || 0) >= ms.at) coef += ms.coefBonus;
-                }
                 return coef;
             },
 
@@ -712,7 +783,7 @@ export const Config = (() => {
             gdpStateMult() {
                 const c = FEATURES.exchange;
                 const gdp = Math.max(0.001, State.get().gdp || 0);
-                const coef = FEATURES.exchange.gdpCoefficient();
+                const coef = c.gdpCoefficient();
                 const raw = 1 + coef * Math.log10(gdp / c.gdp.baselineGdp);
                 return Math.max(
                     c.gdp.minStateMult,
@@ -720,31 +791,29 @@ export const Config = (() => {
                 );
             },
 
-            gdpSellPayout() {
-                const c = FEATURES.exchange;
-                const gdp = State.get().gdp || 0;
-                return (
-                    Math.max(0, gdp - c.gdp.baselineGdp) * c.gdp.quantaPerGdp
-                );
-            },
+            /* ---- cash out (active market only) ---- */
 
             cashOutPayout(ctx) {
                 const c = FEATURES.exchange;
                 const s = State.get();
-                const surplus = Math.max(0, (s.gdp || 0) - c.gdp.baselineGdp);
-                if (surplus <= 0) return 0;
+                const p = s.portfolio;
+                if (!p) return 0;
+                const active = p.activeMarket;
+                const m = c._marketFor(active);
+                if (!m) return 0;
 
-                /* Bonds always liquidate at market value — no cap, no multiplier */
-                const held = s.portfolio?.holdings?.bonds || 0;
+                const surplus = Math.max(0, (s.gdp || 0) - c.gdp.baselineGdp);
+                const held = p.holdings?.[active] || 0;
                 const bondsValue =
                     held > 0
-                        ? c._naturalPrice(Date.now() / 1000) *
+                        ? c._naturalPrice(active, Date.now() / 1000) *
                           c.effectiveUnitCost() *
                           (1 - c.spread) *
                           held
                         : 0;
 
-                /* GDP bonus grows superlinearly with hold time */
+                if (surplus <= 0) return 0;
+
                 const gdpRaw = surplus * c.gdp.quantaPerGdp;
                 const lastReset = s._lastCashOutAt || s.start || Date.now();
                 const holdSeconds = Math.max(
@@ -752,15 +821,12 @@ export const Config = (() => {
                     (Date.now() - lastReset) / 1000
                 );
                 const holdMult = 1 + Math.pow(holdSeconds / 60, 1.5);
-
                 let gdpBonus = gdpRaw * holdMult;
 
-                /* Early cap: first 30s after a cash-out, limit only the GDP bonus.
-       Bonds always liquidate at value (your own money back). */
                 if (holdSeconds < 30 && ctx) {
                     const earlyCap = Math.max(
                         10 * (ctx.tapGain || 0),
-                        ctx.qps || 0
+                        ctx.income || 0
                     );
                     if (earlyCap > 0) gdpBonus = Math.min(gdpBonus, earlyCap);
                 }
@@ -784,33 +850,32 @@ export const Config = (() => {
             canCashOut() {
                 const c = FEATURES.exchange;
                 const s = State.get();
+                const p = s.portfolio;
+                if (!p) return { ok: false, reason: "no-portfolio" };
+                const active = p.activeMarket;
+                const m = c._marketFor(active);
+                if (!m) return { ok: false, reason: "no-market" };
 
-                // 1. Cooldown
                 const cooldownLeft =
                     ((s._cashOutCooldownUntil || 0) - Date.now()) / 1000;
-                if (cooldownLeft > 0) {
+                if (cooldownLeft > 0)
                     return { ok: false, reason: "cooldown", cooldownLeft };
-                }
 
-                // 2. GDP must exceed baseline
                 const surplus = Math.max(0, (s.gdp || 0) - c.gdp.baselineGdp);
-                if (surplus <= 0) {
+                if (surplus <= 0)
                     return { ok: false, reason: "no-gdp-surplus" };
-                }
 
-                // 3. Bond threshold
-                const held = s.portfolio?.holdings?.bonds || 0;
+                const held = p.holdings?.[active] || 0;
                 const required = Math.ceil(
-                    c.capacity() * c.gdp.minBondsForCashOutPct
+                    c.capacityFor(m) * c.gdp.minBondsForCashOutPct
                 );
-                if (held < required) {
+                if (held < required)
                     return {
                         ok: false,
                         reason: "insufficient-bonds",
                         required,
                         held
                     };
-                }
 
                 return { ok: true };
             },
@@ -818,9 +883,8 @@ export const Config = (() => {
             withdrawGdp(ctx) {
                 const c = FEATURES.exchange;
                 const s = State.get();
-
-                const check = FEATURES.exchange.canCashOut();
-                if (!check.ok) {
+                const check = c.canCashOut();
+                if (!check.ok)
                     return {
                         payout: 0,
                         bondsSold: 0,
@@ -828,27 +892,24 @@ export const Config = (() => {
                         waveLockMs: 0,
                         rejected: check.reason
                     };
-                }
 
-                const m = FEATURES.exchange.ensurePortfolio();
-                const gdp = s.gdp || 0;
-                const totalPayout = FEATURES.exchange.cashOutPayout(ctx);
-                if (totalPayout <= 0) {
+                const p = c.ensurePortfolio();
+                const active = p.activeMarket;
+                const totalPayout = c.cashOutPayout(ctx);
+                if (totalPayout <= 0)
                     return {
                         payout: 0,
                         bondsSold: 0,
-                        previousGdp: gdp,
+                        previousGdp: s.gdp || 0,
                         waveLockMs: 0,
                         rejected: "no-payout"
                     };
-                }
 
-                const held = m.holdings.bonds || 0;
-                const { seconds: holdSeconds, mult: holdMult } =
-                    FEATURES.exchange.holdMult();
+                const held = p.holdings[active] || 0;
+                const { seconds: holdSeconds, mult: holdMult } = c.holdMult();
 
-                m.holdings.bonds = 0;
-                m.costBasis.bonds = 0;
+                p.holdings[active] = 0;
+                p.costBasis[active] = 0;
                 s.gdp = c.gdp.baselineGdp;
                 s.quanta += totalPayout;
                 s.total += totalPayout;
@@ -863,7 +924,7 @@ export const Config = (() => {
                 return {
                     payout: totalPayout,
                     bondsSold: held,
-                    previousGdp: gdp,
+                    previousGdp: s.gdp,
                     holdSeconds,
                     holdMult,
                     waveLockMs: lockMs,
@@ -871,94 +932,83 @@ export const Config = (() => {
                 };
             },
 
-            /* ----- card ----- */
+            /* ---- card ---- */
+
             cards: [
                 {
                     id: "exchange",
                     name: "Bond Fund License",
                     currency: "quanta",
-                    flavor: "Expands your bond portfolio's storage capacity.",
+                    flavor: "Expands your bond portfolio's capacity in every market.",
                     cost: lv =>
                         FEATURES.exchange.levelCost *
                         Math.pow(FEATURES.exchange.levelCostMult, lv),
                     effect: lv => {
                         const c = FEATURES.exchange;
-                        const now = c.baseCapacity + c.capacityPerLevel * lv;
+                        const m = c.markets[0];
+                        const now = m.baseCapacity + m.capacityPerLevel * lv;
                         const nxt =
-                            c.baseCapacity + c.capacityPerLevel * (lv + 1);
-                        return `${now} → ${nxt} bonds`;
+                            m.baseCapacity + m.capacityPerLevel * (lv + 1);
+                        return `+${m.capacityPerLevel} capacity per market (${now} → ${nxt} in Calm)`;
                     }
                 }
             ],
 
-            /* ----- hooks ----- */
+            /* ---- hooks ---- */
             hooks: {
                 onTick(s, dt, ctx) {
-                    const holdings = s.portfolio?.holdings?.bonds || 0;
-                    const autoOn = !!s.portfolio?.auto?.bonds;
-
                     FEATURES.exchange.gdpCatchUp(s, dt);
 
-                    if (holdings === 0 && !autoOn) return;
+                    const p = s.portfolio;
+                    if (!p) return;
+                    const c = FEATURES.exchange;
 
-                    if (holdings > 0) {
-                        const mult = FEATURES.exchange.gdpStateMult();
-                        const gain =
-                            FEATURES.exchange.calcDividend() * mult * dt;
-                        s.quanta += gain;
-                        s.total += gain;
-                    }
+                    /* Auto-invest per active market */
+                    const active = p.activeMarket;
+                    const autoOn = !!p.auto?.[active];
+                    if (!autoOn) return;
+                    if (Date.now() < (s._waveLockUntil || 0)) return;
 
-                    if (autoOn) {
-                        const c = FEATURES.exchange;
-                        if (Date.now() < (s._waveLockUntil || 0)) return; // skip during lock
-                        const cap = c.capacity();
-                        if ((s.portfolio.holdings.bonds || 0) >= cap) return;
+                    const market = c._marketFor(active);
+                    if (!market) return;
+                    const cap = c.capacityFor(market);
+                    if ((p.holdings[active] || 0) >= cap) return;
 
-                        const budget = (ctx.qps || 0) * dt * c.autoInvestPct;
-                        if (budget <= 0) return;
+                    const budget = (ctx.income || 0) * dt * c.autoInvestPct;
+                    if (budget <= 0) return;
 
-                        const bondCost =
-                            c._naturalPrice(Date.now() / 1000) *
-                            c.effectiveUnitCost();
-                        s._autoAcc = (s._autoAcc || 0) + budget;
-                        const accCap = bondCost * c.autoInvestAccCap;
-                        if (s._autoAcc > accCap) s._autoAcc = accCap;
+                    const bondCost =
+                        c._naturalPrice(active, Date.now() / 1000) *
+                        c.effectiveUnitCost();
+                    s._autoAcc = (s._autoAcc || 0) + budget;
+                    const accCap = bondCost * c.autoInvestAccCap;
+                    if (s._autoAcc > accCap) s._autoAcc = accCap;
 
-                        while (
-                            s._autoAcc >= bondCost &&
-                            s.quanta >= bondCost &&
-                            (s.portfolio.holdings.bonds || 0) < cap
-                        ) {
-                            s._autoAcc -= bondCost;
-                            s.quanta -= bondCost;
-                            s.portfolio.holdings.bonds =
-                                (s.portfolio.holdings.bonds || 0) + 1;
-                            s.portfolio.costBasis.bonds =
-                                (s.portfolio.costBasis.bonds || 0) + bondCost;
-                        }
+                    while (
+                        s._autoAcc >= bondCost &&
+                        s.quanta >= bondCost &&
+                        (p.holdings[active] || 0) < cap
+                    ) {
+                        s._autoAcc -= bondCost;
+                        s.quanta -= bondCost;
+                        p.holdings[active] = (p.holdings[active] || 0) + 1;
+                        p.costBasis[active] =
+                            (p.costBasis[active] || 0) + bondCost;
                     }
                 }
             },
 
-            /* ----- formula line ----- */
+            /* ---- formula line ---- */
             formula() {
-                const s = State.get();
-                const gdp = s.gdp || 0;
-                const stateMult = FEATURES.exchange.gdpStateMult();
-                const div = FEATURES.exchange.calcDividend();
-
-                const parts = [];
-                if (div > 0)
-                    parts.push(`BONDS +${Format.num(div * stateMult)} Q/s`);
-                if (Math.abs(stateMult - 1) > 0.005) {
-                    parts.push(`GDP ×${stateMult.toFixed(2)}`);
-                }
-                if (parts.length === 0) return null;
-                return { text: parts.join(" · "), accent: "market" };
+                const div = FEATURES.exchange.totalDividends();
+                if (div <= 0) return null;
+                return {
+                    text: `BONDS +${Format.num(div)} Q/s`,
+                    accent: "market"
+                };
             },
 
-            /* ----- view ----- */
+            /* ---- view ---- */
             views: [
                 {
                     id: "exchange",
@@ -966,37 +1016,32 @@ export const Config = (() => {
                     label: "MARKET",
                     mount({ UI, Save, Calc }) {
                         const c = FEATURES.exchange;
+                        const getP = () => c.ensurePortfolio();
+                        const getMarket = () =>
+                            c._marketFor(getP().activeMarket) || c.markets[0];
 
-                        /* ---- element refs ---- */
+                        /* element refs */
                         const elPrice = span(
                             { className: "exchange-price" },
                             "1.00"
                         );
                         const suppressBadge = span(
-                            {
-                                className: "market-suppress-badge hidden",
-                                id: "marketSuppress"
-                            },
+                            { className: "market-suppress-badge hidden" },
                             "SUPPRESSED"
                         );
                         const elHeld = span(
                             { className: "exchange-holdings" },
-                            "0 / 100"
+                            "0 / 0"
                         );
                         const elDiv = el("b", {}, "+0.00 Q/s");
                         const elValue = el("b", {}, "0 Q");
                         const elWaveMult = el("b", {}, "×1.00");
                         const elAvgCost = el("b", {}, "—");
-                        const elCostMult = el("b", { id: "costMult" }, "×1.00");
-                        const elBuy1Cost = span(
-                            { className: "amount" },
-                            "100 Q"
-                        );
+                        const elCostMult = el("b", {}, "×1.00");
+
+                        const elBuy1Cost = span({ className: "amount" }, "—");
                         const elBuyMaxCost = span({ className: "amount" }, "—");
-                        const elSell1Cost = span(
-                            { className: "amount" },
-                            "95 Q"
-                        );
+                        const elSell1Cost = span({ className: "amount" }, "—");
                         const elSellAllCost = span(
                             { className: "amount" },
                             "—"
@@ -1024,12 +1069,9 @@ export const Config = (() => {
                         );
 
                         const canvas = el("canvas", { id: "marketCanvas" });
-                        const floaters = div({
-                            className: "floatHost",
-                            id: "marketFloaters"
-                        });
+                        const floaters = div({ className: "floatHost" }, "");
 
-                        /* ---- GDP panel refs ---- */
+                        /* GDP panel refs */
                         const elGdp = el("b", {}, "10");
                         const elGdpRate = span(
                             { className: "gdp-rate" },
@@ -1046,7 +1088,6 @@ export const Config = (() => {
                             "+0 Q"
                         );
                         const elHoldTime = el("b", {}, "0s");
-
                         const sellBtn = el(
                             "button",
                             { className: "exchange-btn sell gdp-sell" },
@@ -1077,7 +1118,7 @@ export const Config = (() => {
                             ]
                         );
 
-                        /* ---- auto-invest panel ---- */
+                        /* auto-invest */
                         const autoBtn = el(
                             "button",
                             { className: "exchange-btn locked" },
@@ -1093,7 +1134,7 @@ export const Config = (() => {
                             autoHint
                         ]);
 
-                        /* ---- milestones ---- */
+                        /* milestones */
                         const milestoneList = div({ className: "list" });
                         const milestoneRows = [];
                         for (const ms of c.milestones) {
@@ -1110,6 +1151,54 @@ export const Config = (() => {
                             milestoneList
                         ]);
 
+                        /* market chips */
+                        const chipsContainer = div({
+                            className: "market-chips"
+                        });
+                        function rebuildChips() {
+                            const p = getP();
+                            const total = State.get().total || 0;
+                            chipsContainer.replaceChildren(
+                                ...c.markets.map(m => {
+                                    const unlocked = total >= m.unlockAt;
+                                    return el(
+                                        "button",
+                                        {
+                                            className:
+                                                "market-chip" +
+                                                (m.id === p.activeMarket
+                                                    ? " active"
+                                                    : "") +
+                                                (unlocked ? "" : " locked"),
+                                            dataset: { market: m.id },
+                                            onClick: () => {
+                                                if (!unlocked) return;
+                                                p.activeMarket = m.id;
+                                                rebuildChips();
+                                                render();
+                                                Save.write();
+                                            }
+                                        },
+                                        [
+                                            el("b", {}, m.name),
+                                            el(
+                                                "small",
+                                                {},
+                                                unlocked
+                                                    ? m.desc
+                                                    : "Unlocks at " +
+                                                          Format.num(
+                                                              m.unlockAt
+                                                          ) +
+                                                          " Q"
+                                            )
+                                        ]
+                                    );
+                                })
+                            );
+                        }
+                        rebuildChips();
+
                         const section = el(
                             "section",
                             {
@@ -1125,6 +1214,7 @@ export const Config = (() => {
                                         { className: "panel-title" },
                                         "Quantum Bond Fund"
                                     ),
+                                    chipsContainer,
                                     div({ className: "exchange-chart-wrap" }, [
                                         canvas,
                                         floaters
@@ -1141,7 +1231,7 @@ export const Config = (() => {
                                         elDiv
                                     ]),
                                     div({ className: "stat-row" }, [
-                                        span({}, "Portfolio value"),
+                                        span({}, "Position value"),
                                         elValue
                                     ]),
                                     div({ className: "stat-row" }, [
@@ -1154,7 +1244,7 @@ export const Config = (() => {
                                     ]),
                                     div({ className: "stat-row" }, [
                                         span({}, "Cost multiplier"),
-                                        el("b", { id: "costMult" }, "×1.00")
+                                        elCostMult
                                     ]),
                                     div({ className: "exchange-buttons" }, [
                                         div({ className: "exchange-row" }, [
@@ -1172,14 +1262,12 @@ export const Config = (() => {
                                 gdpPanel,
                                 div(
                                     { className: "hint" },
-                                    "Buy bonds when the price is low (green). Holdings pay passive dividends. " +
-                                        "GDP multiplies ALL Q/s — tap, passive, and dividends — but can also drag you below ×1. " +
-                                        "Sell GDP to cash out for Quanta, resetting the economy to neutral."
+                                    "Buy low, sell high. Each market is unlocked by total Quanta. Entropy amplifies price swings."
                                 )
                             ]
                         );
 
-                        /* ---- canvas ---- */
+                        /* canvas */
                         let ctx = null,
                             W = 0,
                             H = 0;
@@ -1212,12 +1300,16 @@ export const Config = (() => {
                                 N = 80,
                                 pad = 6;
                             const ih = H - pad * 2;
-                            const range = c.maxPrice - c.minPrice;
+                            const market = getMarket();
+                            const range = market.maxPrice - market.minPrice;
 
                             ctx.clearRect(0, 0, W, H);
 
                             const midY =
-                                H - pad - ((1.0 - c.minPrice) / range) * ih;
+                                H -
+                                pad -
+                                ((market.waveBase - market.minPrice) / range) *
+                                    ih;
                             ctx.beginPath();
                             ctx.setLineDash([3, 5]);
                             ctx.moveTo(0, midY);
@@ -1230,10 +1322,12 @@ export const Config = (() => {
                             const pts = new Array(N + 1);
                             for (let i = 0; i <= N; i++) {
                                 const t = now - SPAN + (i / N) * SPAN;
-                                const p = c.price(t);
+                                const price = c.price(market.id, t);
                                 pts[i] = [
                                     (i / N) * W,
-                                    H - pad - ((p - c.minPrice) / range) * ih
+                                    H -
+                                        pad -
+                                        ((price - market.minPrice) / range) * ih
                                 ];
                             }
 
@@ -1249,8 +1343,11 @@ export const Config = (() => {
                             ctx.fillStyle = grad;
                             ctx.fill();
 
-                            const cur = c.price(now);
-                            const color = cur > 1.15 ? "#ffd166" : "#4ade80";
+                            const cur = c.price(market.id, now);
+                            const color =
+                                cur > market.waveBase * 1.15
+                                    ? "#ffd166"
+                                    : "#4ade80";
                             ctx.beginPath();
                             ctx.moveTo(pts[0][0], pts[0][1]);
                             for (let i = 1; i <= N; i++)
@@ -1264,7 +1361,9 @@ export const Config = (() => {
                             ctx.shadowBlur = 0;
 
                             const cy =
-                                H - pad - ((cur - c.minPrice) / range) * ih;
+                                H -
+                                pad -
+                                ((cur - market.minPrice) / range) * ih;
                             ctx.beginPath();
                             ctx.arc(W - 2, cy, 3.5, 0, Math.PI * 2);
                             ctx.fillStyle = color;
@@ -1274,18 +1373,22 @@ export const Config = (() => {
                             ctx.shadowBlur = 0;
                         }
 
-                        /* ---- render ---- */
+                        /* render */
                         function render() {
                             const s = State.get();
-                            const m = FEATURES.exchange.ensurePortfolio();
-                            const locked = FEATURES.exchange.isLocked();
+                            const p = getP();
+                            const market = getMarket();
+                            const locked = c.isLocked();
 
-                            const max = c.capacity();
-                            const held = m.holdings.bonds || 0;
+                            const cap = c.capacityFor(market);
+                            const held = p.holdings[market.id] || 0;
                             const now = Date.now() / 1000;
-                            const displayPrice = c.price(now); // 0 during lock
-                            const naturalPrice = c._naturalPrice(now); // true price
-                            const unitCost = c.effectiveUnitCost(); // entropy-scaled
+                            const displayPrice = c.price(market.id, now);
+                            const naturalPrice = c._naturalPrice(
+                                market.id,
+                                now
+                            );
+                            const unitCost = c.effectiveUnitCost();
                             const buyUnit = naturalPrice * unitCost;
                             const sellUnit =
                                 naturalPrice * unitCost * (1 - c.spread);
@@ -1294,24 +1397,15 @@ export const Config = (() => {
                                 "Ⓠ " + Format.plain(displayPrice);
                             elPrice.classList.toggle("suppressed", locked);
                             suppressBadge.classList.toggle("hidden", !locked);
+                            elHeld.textContent = held + " / " + cap;
 
-                            elHeld.textContent = held + " / " + max;
-
-                            const divRate = FEATURES.exchange.calcDividend();
+                            const divRate = c.calcDividend(market.id);
                             elDiv.textContent =
                                 "+" + Format.num(divRate) + " Q/s";
                             elValue.textContent =
                                 Format.num(held * buyUnit) + " Q";
 
                             const waveM = c.waveMult();
-                            const ratio = c.positionRatio();
-                            const avgCost =
-                                held > 0
-                                    ? (m.costBasis.bonds || 0) /
-                                      held /
-                                      c.effectiveUnitCost()
-                                    : 0;
-
                             elWaveMult.textContent = "×" + Format.plain(waveM);
                             elWaveMult.style.color =
                                 waveM > 1.05
@@ -1319,51 +1413,50 @@ export const Config = (() => {
                                     : waveM < 0.95
                                       ? "var(--surge)"
                                       : "";
+
+                            const avgCost =
+                                held > 0
+                                    ? (p.costBasis[market.id] || 0) /
+                                      held /
+                                      unitCost
+                                    : 0;
                             elAvgCost.textContent =
                                 held > 0
                                     ? Format.plain(avgCost) +
                                       " → " +
                                       Format.plain(naturalPrice)
                                     : "—";
-
-                            const costMult = unitCost / c.unitCost;
                             elCostMult.textContent =
-                                "×" + Format.plain(costMult);
+                                "×" + Format.plain(unitCost / c.unitCost);
 
-                            /* ---- GDP panel ---- */
+                            /* GDP panel */
                             const gdp = s.gdp || 0;
                             if (held > 0 || gdp > c.gdp.baselineGdp * 1.01) {
                                 gdpPanel.classList.remove("hidden");
                                 elGdp.textContent = Format.num(gdp);
-                                const rateMult =
-                                    FEATURES.exchange.bondGdpRateMult();
+                                const rateMult = c.bondGdpRateMult();
                                 elGdpRate.textContent =
                                     " (+" +
-                                    Format.plain(FEATURES.exchange.gdpRate()) +
+                                    Format.plain(c.gdpRate()) +
                                     "/s" +
                                     (rateMult > 1.001
                                         ? " ×" + Format.plain(rateMult)
                                         : "") +
                                     ")";
                                 elGdpMult.textContent =
-                                    "×" +
-                                    Format.plain(
-                                        FEATURES.exchange.gdpStateMult()
-                                    );
+                                    "×" + Format.plain(c.gdpStateMult());
                                 elGdpMile.textContent =
-                                    FEATURES.exchange.gdpMilestonesPassed() +
+                                    c.gdpMilestonesPassed() +
                                     " / " +
                                     c.gdp.milestones.length;
-                                const check = FEATURES.exchange.canCashOut();
-                                const s2 = State.get();
+
+                                const check = c.canCashOut();
                                 if (check.ok) {
-                                    const payout =
-                                        FEATURES.exchange.cashOutPayout({
-                                            tapGain: Calc.tapGain(),
-                                            qps: Calc.effectiveQps()
-                                        });
+                                    const payout = c.cashOutPayout({
+                                        income: Calc.income()
+                                    });
                                     const { seconds: holdSec, mult: holdMul } =
-                                        FEATURES.exchange.holdMult();
+                                        c.holdMult();
                                     elSellPayout.textContent =
                                         "+" +
                                         Format.num(payout) +
@@ -1376,27 +1469,27 @@ export const Config = (() => {
                                 } else {
                                     sellBtn.classList.remove("can");
                                     sellBtn.classList.add("poor");
-                                    if (check.reason === "cooldown") {
+                                    if (check.reason === "cooldown")
                                         elSellPayout.textContent =
                                             "COOLDOWN " +
                                             Math.ceil(check.cooldownLeft) +
                                             "s";
-                                    } else if (
+                                    else if (
                                         check.reason === "insufficient-bonds"
-                                    ) {
+                                    )
                                         elSellPayout.textContent =
                                             "NEED " +
                                             (check.required - check.held) +
                                             " BONDS";
-                                    } else {
+                                    else
                                         elSellPayout.textContent =
                                             "GDP AT BASELINE";
-                                    }
                                 }
                             } else {
                                 gdpPanel.classList.add("hidden");
                             }
 
+                            /* buy buttons */
                             if (locked) {
                                 elBuy1Cost.textContent = "LOCKED";
                                 elBuyMaxCost.textContent = "LOCKED";
@@ -1405,21 +1498,19 @@ export const Config = (() => {
                                 btnBuyMax.classList.add("poor");
                                 btnBuyMax.classList.remove("can");
                             } else {
-                                const space = Math.max(0, max - held);
+                                const space = Math.max(0, cap - held);
                                 const canAfford = Math.floor(
                                     s.quanta / buyUnit
                                 );
                                 const buyMaxAmt = Math.min(space, canAfford);
-                                const buy1Amt = Math.min(1, buyMaxAmt);
-
                                 elBuy1Cost.textContent =
                                     Format.num(buyUnit) + " Q";
                                 elBuyMaxCost.textContent =
                                     buyMaxAmt > 0
                                         ? Format.num(buyUnit * buyMaxAmt) + " Q"
                                         : "—";
-                                btnBuy1.classList.toggle("can", buy1Amt >= 1);
-                                btnBuy1.classList.toggle("poor", buy1Amt < 1);
+                                btnBuy1.classList.toggle("can", buyMaxAmt >= 1);
+                                btnBuy1.classList.toggle("poor", buyMaxAmt < 1);
                                 btnBuyMax.classList.toggle(
                                     "can",
                                     buyMaxAmt >= 1
@@ -1441,34 +1532,34 @@ export const Config = (() => {
                             btnSellAll.classList.toggle("can", held >= 1);
                             btnSellAll.classList.toggle("poor", held < 1);
 
+                            /* auto-invest */
                             const autoUnlocked = held >= c.autoInvestUnlockAt;
-                            const autoOn = !!m.auto.bonds;
+                            const autoOn = !!p.auto[market.id];
                             if (autoUnlocked) {
                                 autoBtn.textContent = `AUTO-INVEST: ${autoOn ? "ON" : "OFF"}`;
                                 autoBtn.classList.toggle("on", autoOn);
                                 autoBtn.classList.remove("locked", "poor");
                                 autoHint.textContent = autoOn
-                                    ? `Diverting ${(c.autoInvestPct * 100).toFixed(0)}% of Q/s into bonds automatically.`
-                                    : `Toggle to divert ${(c.autoInvestPct * 100).toFixed(0)}% of your Q/s into bonds.`;
+                                    ? `Diverting ${(c.autoInvestPct * 100).toFixed(0)}% of income into this market.`
+                                    : `Toggle to divert ${(c.autoInvestPct * 100).toFixed(0)}% of income here.`;
                             } else {
                                 autoBtn.textContent = "AUTO-INVEST: LOCKED";
                                 autoBtn.classList.add("locked");
                                 autoBtn.classList.remove("on", "poor");
-                                autoHint.textContent =
-                                    `Unlocks at ${c.autoInvestUnlockAt} bonds ` +
-                                    `(${c.autoInvestUnlockAt - held} more).`;
+                                autoHint.textContent = `Unlocks at ${c.autoInvestUnlockAt} bonds (${c.autoInvestUnlockAt - held} more).`;
                             }
 
-                            for (const mr of milestoneRows) {
-                                mr.el.classList.toggle("done", held >= mr.at);
-                            }
+                            /* milestones — based on total across all markets */
+                            const total = c.totalBonds();
+                            for (const mr of milestoneRows)
+                                mr.el.classList.toggle("done", total >= mr.at);
 
                             drawChart();
                         }
 
-                        /* ---- actions ---- */
+                        /* actions */
                         function doBuy(n) {
-                            const r = FEATURES.exchange.buyBonds(n);
+                            const r = c.buyBonds(getP().activeMarket, n);
                             if (r.amount <= 0) return;
                             UI.floater(
                                 floaters,
@@ -1484,7 +1575,7 @@ export const Config = (() => {
                             Save.write();
                         }
                         function doSell(n) {
-                            const r = FEATURES.exchange.sellBonds(n);
+                            const r = c.sellBonds(getP().activeMarket, n);
                             if (r.amount <= 0) return;
                             UI.floater(
                                 floaters,
@@ -1500,10 +1591,13 @@ export const Config = (() => {
                             Save.write();
                         }
                         function toggleAuto() {
-                            const m = FEATURES.exchange.ensurePortfolio();
-                            if ((m.holdings.bonds || 0) < c.autoInvestUnlockAt)
+                            const p = getP();
+                            const active = p.activeMarket;
+                            if (
+                                (p.holdings[active] || 0) < c.autoInvestUnlockAt
+                            )
                                 return;
-                            m.auto.bonds = !m.auto.bonds;
+                            p.auto[active] = !p.auto[active];
                             render();
                             Save.write();
                         }
@@ -1514,51 +1608,32 @@ export const Config = (() => {
                         on(btnSellAll, "click", () => doSell(9999));
                         on(autoBtn, "click", toggleAuto);
                         on(sellBtn, "click", () => {
-                            const r = FEATURES.exchange.withdrawGdp({
-                                tapGain: Calc.tapGain(),
-                                qps: Calc.effectiveQps()
-                            });
+                            const r = c.withdrawGdp({ income: Calc.income() });
                             if (r.payout <= 0) {
-                                if (r.rejected === "cooldown") {
+                                if (r.rejected === "cooldown")
                                     UI.toast("Cash-out on cooldown");
-                                } else if (
-                                    r.rejected === "insufficient-bonds"
-                                ) {
-                                    UI.toast("Buy to full bond capacity first");
-                                } else if (r.rejected === "no-gdp-surplus") {
+                                else if (r.rejected === "insufficient-bonds")
+                                    UI.toast(
+                                        "Fill this market's capacity first"
+                                    );
+                                else if (r.rejected === "no-gdp-surplus")
                                     UI.toast(
                                         "GDP is at baseline — wait for growth"
                                     );
-                                }
                                 return;
                             }
-
                             UI.floater(
                                 floaters,
                                 "+" + Format.num(r.payout) + " Q",
                                 "gold"
                             );
-
-                            const heldPart =
-                                Format.time(r.holdSeconds) +
-                                " · ×" +
-                                Format.plain(r.holdMult);
-                            const bondsPart =
-                                r.bondsSold > 0
-                                    ? " · " + r.bondsSold + " bonds liquidated"
-                                    : "";
-
                             UI.toast(
                                 "Cashed out: +" +
                                     Format.num(r.payout) +
-                                    " Q (" +
-                                    heldPart +
-                                    bondsPart +
-                                    ") · next in " +
+                                    " Q · next in " +
                                     (r.cooldownMs / 1000).toFixed(0) +
                                     "s"
                             );
-
                             if (navigator.vibrate) {
                                 try {
                                     navigator.vibrate(15);
@@ -1572,11 +1647,11 @@ export const Config = (() => {
                             element: section,
                             render,
                             onShow() {
-                                const m = FEATURES.exchange.ensurePortfolio();
-                                m.everVisited = true;
+                                getP().everVisited = true;
                                 document
                                     .getElementById("exchangePill")
                                     ?.classList.add("revealed");
+                                rebuildChips();
                                 requestAnimationFrame(() => {
                                     resize();
                                     drawChart();
@@ -1596,6 +1671,7 @@ export const Config = (() => {
         PHASE_BASE,
         COHERENCE_BASE,
         OFFLINE_CAP,
+        BASE_INCOME,
         UPGRADES,
         MODIFIERS,
         PHASE_UPGRADES,

@@ -38,20 +38,12 @@ export const UI = (() => {
             div({ className: "qlabel" }, "QUANTA"),
             div({ className: "hud-sub" }, [
                 div({ className: "pill q" }, [
-                    span({ className: "k" }, "ΔQ/TAP"),
-                    span({ className: "v", id: "tapVal" }, "+1.00")
-                ]),
-                div({ className: "pill q" }, [
-                    span({ className: "k" }, "Q/S"),
+                    span({ className: "k" }, "INCOME"),
                     span({ className: "v", id: "qpsVal" }, "+0.00")
                 ]),
                 div({ className: "pill c" }, [
                     span({ className: "k" }, "𝒞"),
                     span({ className: "v", id: "cohVal" }, "0")
-                ]),
-                div({ className: "pill s" }, [
-                    span({ className: "k" }, "SURGE"),
-                    span({ className: "v", id: "surgeVal" }, "×1.00")
                 ]),
                 div({ className: "pill wave", id: "wavePill" }, [
                     span({ className: "k" }, "WAVE"),
@@ -94,13 +86,6 @@ export const UI = (() => {
     }
 
     function buildObserveView() {
-        const tapBtn = el("button", { id: "tapBtn", "aria-label": "Observe" }, [
-            span({ className: "tap-glyph" }, "Ψ"),
-            span({ className: "tap-text" }, "OBSERVE")
-        ]);
-        const floaters = div({ className: "floatHost", id: "floaters" });
-        const tapWrap = div({ className: "tapWrap" }, [tapBtn, floaters]);
-
         const formulaPanel = div({ className: "panel" }, [
             div({ className: "panel-title" }, "Live Breakdown"),
             div({ className: "formula-table", id: "formulaTable" }),
@@ -108,10 +93,9 @@ export const UI = (() => {
         ]);
 
         const telemetry = div({ className: "panel" }, [
-            div({ className: "panel-title" }, "Telemetry"),
+            div({ className: "panel-title" }, "Portfolio Breakdown"),
             statRow("Total Quanta harvested", "statTotal", "0"),
             statRow("Observations performed", "statTaps", "0"),
-            statRow("Effective ΔQ/tap", "statTapGain", "1.00"),
             statRow("Global resonance", "statGlobal", "×1.00"),
             statRow("Collapses performed", "statCollapses", "0"),
             statRow("Uptime", "statTime", "0s")
@@ -124,20 +108,13 @@ export const UI = (() => {
         );
         const hint = div(
             { className: "hint" },
-            "Surge multiplies your QPS — buy Vacuum Collectors so it has something to multiply."
+            "Every Q is a decision now. Trade on the MARKET tab."
         );
 
         return el(
             "section",
             { className: "view active", dataset: { view: "observe" } },
-            [
-                tapWrap,
-                buildSurgePanel(),
-                formulaPanel,
-                telemetry,
-                resetBtn,
-                hint
-            ]
+            [formulaPanel, telemetry, resetBtn, hint]
         );
     }
 
@@ -149,7 +126,7 @@ export const UI = (() => {
                 div({ className: "list", id: "upgradeList" }),
                 div(
                     { className: "hint" },
-                    "Upgrades cost Quanta (cyan) or Coherence (violet). Feature upgrades appear below the core list."
+                    "Trade in the MARKET tab. Every Q is a decision."
                 )
             ]
         );
@@ -598,222 +575,111 @@ export const UI = (() => {
 
     function renderFormula() {
         const s = State.get();
-        const entUnlocked = Calc.entropyUnlocked();
-        const entMult = Calc.entropyMult();
+        const c = Config.FEATURES.exchange;
+        const p = s.portfolio;
+        if (!p) return;
 
-        const tapRaw = Calc.rawTap();
-        const tapFin = Calc.tapGain();
-        const tapSurge = tapFin * Calc.surgeMult();
+        const rows = [];
+        const mults = [];
 
-        const autoRaw = Calc.rawAuto();
-        const autoFin = Calc.qps();
-        const autoSurge = Calc.effectiveQps();
+        /* Income channels */
+        rows.push(["Baseline income", "—", Format.num(Calc.baselineIncome())]);
+        const divTotal = Calc.dividendIncome();
+        if (divTotal > 0) {
+            rows.push(["Bond dividends", "—", Format.num(divTotal)]);
+        }
+        rows.push(["TOTAL /s", "—", Format.num(Calc.income())]);
 
-        const capTap = Calc.softcapThreshold("tap");
-        const capAuto = Calc.softcapThreshold("auto");
-
-        const surgeM = Calc.surgeMult();
-        const gdpM = Calc.gdpStateMult ? Calc.gdpStateMult() : 1;
-
-        /* --- multiplier rows --- */
+        /* Multipliers */
         const resM = Math.pow(Config.RESONANCE_BASE, s.up.resonance);
         const phaseM = Math.pow(Config.PHASE_BASE, s.cUp.lock);
-
-        const multRows = [];
         if (s.up.resonance > 0)
-            multRows.push(["Resonance", "×" + resM.toFixed(2), "✓", "✓"]);
-        if (s.cUp.lock > 0)
-            multRows.push(["Phase", "×" + phaseM.toFixed(2), "✓", "✓"]);
-        if (entUnlocked && entMult !== 1)
-            multRows.push(["Entropy", "×" + entMult.toFixed(2), "✓", "✓"]);
-        for (const m of Config.MODIFIERS) {
-            const lv = s.mod[m.id] || 0;
-            if (lv === 0) continue;
-            const mult = 1 + m.weight * lv;
-            const targets =
-                m.target === "all"
-                    ? ["✓", "✓"]
-                    : m.target === "tap"
-                      ? ["✓", "—"]
-                      : ["—", "✓"];
-            multRows.push([
-                m.sym + " lv " + lv,
-                "×" + mult.toFixed(2),
-                targets[0],
-                targets[1]
-            ]);
-        }
+            mults.push(["Resonance", "×" + resM.toFixed(2)]);
+        if (s.cUp.lock > 0) mults.push(["Phase", "×" + phaseM.toFixed(2)]);
+        if (Calc.entropyUnlocked() && Calc.entropyMult() !== 1)
+            mults.push(["Entropy", "×" + Calc.entropyMult().toFixed(2)]);
+        const waveM = Calc.waveMult();
+        if (Math.abs(waveM - 1) > 0.005)
+            mults.push(["Wave (position)", "×" + waveM.toFixed(2)]);
+        const gdpM = Calc.gdpStateMult();
         if (Math.abs(gdpM - 1) > 0.005)
-            multRows.push(["GDP", "×" + gdpM.toFixed(2), "✓", "✓"]);
+            mults.push(["GDP", "×" + gdpM.toFixed(2)]);
 
-        const waveMultNow = Calc.waveMult();
-        if (Math.abs(waveMultNow - 1) > 0.005) {
-            multRows.push([
-                "Wave (position)",
-                "×" + waveMultNow.toFixed(2),
-                "✓",
-                "✓"
-            ]);
-        }
-
-        /* --- channel rows --- */
-        const channelRows = [
-            ["Tap (raw → cap)", Format.num(tapRaw), Format.num(tapFin)]
-        ];
-        if (surgeM > 1.001)
-            channelRows.push([
-                "  └ Surge ×" + surgeM.toFixed(2),
-                "—",
-                Format.num(tapSurge)
-            ]);
-
-        channelRows.push([
-            "Passive (raw → cap)",
-            Format.num(autoRaw),
-            Format.num(autoFin)
-        ]);
-        if (surgeM > 1.001)
-            channelRows.push([
-                "  └ Surge ×" + surgeM.toFixed(2),
-                "—",
-                Format.num(autoSurge)
-            ]);
-
-        /* --- feature lines --- */
-        const tapCtx = { tapGain: Calc.tapGain() };
-        const featLines = [];
-        for (const f of Features.all()) {
-            if (!f.formula) continue;
-            const line = f.formula(s, tapCtx);
-            if (line?.text) featLines.push(line);
-        }
-
-        /* --- signature to skip rebuild --- */
-        const sig = [
-            tapRaw,
-            tapFin,
-            autoRaw,
-            autoFin,
-            surgeM,
-            gdpM,
-            entUnlocked ? 1 : 0,
-            multRows.length,
-            channelRows.length,
-            featLines.map(l => l.text).join("¦")
-        ].join("|");
+        /* Build signature */
+        const sig =
+            rows.map(r => r.join("|")).join("¦") +
+            "|" +
+            mults.map(r => r.join("|")).join("¦");
         if (sig === lastFormulaSig) return;
         lastFormulaSig = sig;
 
-        /* --- build table --- */
         const table = el("table", { className: "breakdown-table" });
 
-        /* header row */
-        const head = el("tr", { className: "bd-head" }, [
-            el("th", {}, "Channel"),
-            el("th", {}, "Raw"),
-            el("th", {}, "Final")
-        ]);
-        table.appendChild(head);
-
-        for (const [label, raw, fin] of channelRows) {
-            const isSub = label.startsWith("  ");
-            const tr = el("tr", { className: isSub ? "bd-sub" : "bd-main" }, [
-                el("td", {}, label.trim()),
-                el("td", { className: "bd-num" }, raw),
-                el("td", { className: "bd-num bd-fin" }, fin)
-            ]);
-            table.appendChild(tr);
+        table.appendChild(
+            el("tr", { className: "bd-head" }, [
+                el("th", {}, "Income channel"),
+                el("th", {}, "—"),
+                el("th", {}, "Q/s")
+            ])
+        );
+        for (const [label, mid, val] of rows) {
+            const isTotal = label.startsWith("TOTAL");
+            table.appendChild(
+                el("tr", { className: isTotal ? "bd-main" : "bd-sub" }, [
+                    el("td", {}, label),
+                    el("td", { className: "bd-num" }, mid),
+                    el("td", { className: "bd-num bd-fin" }, val)
+                ])
+            );
         }
 
-        /* multiplier section */
-        if (multRows.length > 0) {
-            const sep = el("tr", { className: "bd-sep" }, [
-                el("td", { colSpan: 3 }, "")
-            ]);
-            table.appendChild(sep);
-
-            const mhead = el("tr", { className: "bd-head" }, [
-                el("th", {}, "Multiplier"),
-                el("th", {}, "Value"),
-                el("th", {}, "Tap · Auto")
-            ]);
-            table.appendChild(mhead);
-
-            for (const [name, val, tap, auto] of multRows) {
-                const tr = el("tr", { className: "bd-mult" }, [
-                    el("td", {}, name),
-                    el("td", { className: "bd-num" }, val),
-                    el("td", { className: "bd-num" }, tap + " · " + auto)
-                ]);
-                table.appendChild(tr);
+        if (mults.length > 0) {
+            table.appendChild(
+                el("tr", { className: "bd-sep" }, [
+                    el("td", { colSpan: 3 }, "")
+                ])
+            );
+            table.appendChild(
+                el("tr", { className: "bd-head" }, [
+                    el("th", {}, "Multiplier"),
+                    el("th", {}, "Value"),
+                    el("th", {}, "")
+                ])
+            );
+            for (const [name, val] of mults) {
+                table.appendChild(
+                    el("tr", { className: "bd-mult" }, [
+                        el("td", {}, name),
+                        el("td", { className: "bd-num" }, val),
+                        el("td", {}, "")
+                    ])
+                );
             }
         }
 
         $("#formulaTable").replaceChildren(table);
 
-        /* --- caps exceeded callouts --- */
-        const caps = [];
-        if (tapRaw > capTap)
-            caps.push(
-                div(
-                    { className: "f-cap" },
-                    "TAP cap: raw " +
-                        Format.num(tapRaw) +
-                        " > threshold " +
-                        Format.num(capTap) +
-                        " → compressed"
-                )
-            );
-        if (autoRaw > capAuto)
-            caps.push(
-                div(
-                    { className: "f-cap" },
-                    "AUTO cap: raw " +
-                        Format.num(autoRaw) +
-                        " > threshold " +
-                        Format.num(capAuto) +
-                        " → compressed"
-                )
-            );
-
-        /* --- feature lines --- */
+        /* Feature formula lines */
+        const tapCtx = { income: Calc.income() };
         const featEls = [];
-        for (const line of featLines) {
-            featEls.push(
-                div(
-                    {
-                        className:
-                            "f-feature" +
-                            (line.accent ? " " + line.accent : ""),
-                        style: { marginTop: "4px" }
-                    },
-                    line.text
-                )
-            );
+        for (const f of Features.all()) {
+            if (!f.formula) continue;
+            const line = f.formula(s, tapCtx);
+            if (line?.text) {
+                featEls.push(
+                    div(
+                        {
+                            className:
+                                "f-feature" +
+                                (line.accent ? " " + line.accent : ""),
+                            style: { marginTop: "4px" }
+                        },
+                        line.text
+                    )
+                );
+            }
         }
-
-        $("#formula").replaceChildren(...caps, ...featEls);
-    }
-
-    function renderSurge() {
-        const s = State.get();
-        const mult = Calc.surgeMult();
-        const pool = s.surge || 0;
-        const surgeValEl = $("#surgeVal");
-        if (!surgeValEl) return;
-
-        surgeValEl.textContent = "×" + Format.plain(mult);
-        $("#surgeMult").textContent = "×" + Format.plain(mult);
-        $("#surgePool").textContent = Format.plain(pool);
-
-        const cost = Calc.surgeCost();
-        const gain = Calc.surgeGain();
-        $("#consumeCost").textContent = Format.num(cost);
-        $("#consumeGain").textContent = "+" + Format.plain(gain);
-
-        const btn = $("#consumeBtn");
-        btn.classList.toggle("poor", s.quanta < cost);
-        $("#surgePanel").classList.toggle("active", pool > 0.01);
+        $("#formula").replaceChildren(...featEls);
     }
 
     function renderHUD() {
@@ -821,12 +687,8 @@ export const UI = (() => {
         const t = clock();
 
         $("#quantaVal").textContent = Format.num(s.quanta);
-        $("#tapVal").textContent =
-            "+" + Format.num(Calc.tapGain() * Calc.surgeMult());
-        $("#qpsVal").textContent = "+" + Format.num(Calc.effectiveQps());
+        $("#qpsVal").textContent = "+" + Format.num(Calc.income());
         $("#cohVal").textContent = Format.num(s.coherence);
-
-        renderSurge();
 
         const waveM = Calc.waveMult();
         $("#waveVal").textContent = "×" + Format.plain(waveM);
@@ -837,14 +699,15 @@ export const UI = (() => {
 
         /* exchange pill */
         const exFeature = Features.get("exchange");
-        if (exFeature && exFeature.price && s.portfolio?.everVisited) {
+        if (exFeature && s.portfolio?.everVisited) {
             const pill = document.getElementById("exchangePill");
             if (pill) {
                 pill.classList.add("revealed");
                 const v = pill.querySelector(".v");
+                const active = s.portfolio.activeMarket || "calm";
                 if (v)
                     v.textContent = Format.plain(
-                        exFeature.price(Date.now() / 1000)
+                        exFeature._naturalPrice(active, Date.now() / 1000)
                     );
             }
         }
@@ -877,7 +740,6 @@ export const UI = (() => {
         const s = State.get();
         $("#statTotal").textContent = Format.num(s.total);
         $("#statTaps").textContent = Format.num(s.taps);
-        $("#statTapGain").textContent = Format.num(Calc.tapGain());
         $("#statGlobal").textContent = "×" + Format.num(Calc.globalMult());
         $("#statCollapses").textContent = Format.num(s.collapses);
         $("#statTime").textContent = Format.time((Date.now() - s.start) / 1000);
