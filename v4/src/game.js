@@ -1,7 +1,7 @@
 import { Config, State, Save } from "./config.js";
 import { Market } from "./market.js";
 import { UI } from "./ui.js";
-import { on, Format } from "./util.js";
+import { Format } from "./util.js";
 
 export const Game = (() => {
     let lastFrame = 0;
@@ -37,13 +37,23 @@ export const Game = (() => {
     function cashOut(id) {
         const r = Market.cashOut(id);
         if (r.ok) {
-            UI.toast("Cashed out +" + Format.num(r.value) + " Q");
+            if (r.milestoneHit) {
+                UI.toast(
+                    "MILESTONE! +" +
+                        Format.num(r.value) +
+                        " Q cash out + " +
+                        Format.num(r.milestoneBonusQ) +
+                        " Q bonus · dividend now +" +
+                        Math.round(r.newMilestoneBonus * 100) +
+                        "%"
+                );
+            } else {
+                UI.toast("Cashed out +" + Format.num(r.value) + " Q");
+            }
             Save.write();
             UI.render();
         } else {
             if (r.reason === "cooldown") UI.toast("Cash out on cooldown");
-            else if (r.reason === "low-contribution")
-                UI.toast("Trade profitably first");
         }
     }
 
@@ -55,9 +65,19 @@ export const Game = (() => {
         }
     }
 
+    function resetMarket(id) {
+        const r = Market.resetMarket(id);
+        if (r.ok) {
+            UI.toast("Market reset · q restored to " + Format.num(r.amount));
+            Save.write();
+            UI.render();
+        }
+    }
+
     function reset() {
         if (!confirm("Erase save and restart?")) return;
-        Save.wipe();
+        Save.disable(); // block unload handlers from re-saving
+        Save.wipe(); // now safe to delete the key
         location.reload();
     }
 
@@ -106,6 +126,7 @@ export const Game = (() => {
             upgradeShares,
             cashOut,
             upgradePortfolio,
+            resetMarket,
             reset
         });
         wireInputs();

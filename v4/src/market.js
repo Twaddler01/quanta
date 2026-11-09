@@ -61,20 +61,17 @@ export const Market = (() => {
     const buyPrice = (id, t) => naturalPrice(id, t) * (1 + Config.TRADING_FEE);
     const sellPrice = id => t => naturalPrice(id, t);
 
-    function multiplier(id) {
+    /* ---- multipliers and contributions ---- */
+
+    function marketMultiplier(id) {
         const m = def(id);
-        const lifetime = State.get().markets[id].lifetimeProfit;
-        return 1 + Math.sqrt(Math.max(0, lifetime) / m.threshold);
+        const mk = State.get().markets[id];
+        return 1 + Math.sqrt(Math.max(0, mk.lifetimeProfit) / m.threshold);
     }
 
-    function contribution(id) {
-        return multiplier(id) * def(id).tierWeight;
-    }
-
-    function totalContribution() {
-        let sum = 0;
-        for (const m of Config.MARKETS) sum += contribution(m.id);
-        return sum;
+    function shareMult(id) {
+        const shares = State.get().markets[id].shares;
+        return 1 + shares * Config.SHARE_MULT_BONUS;
     }
 
     function portfolioBoostMult() {
@@ -82,14 +79,31 @@ export const Market = (() => {
         return 1 + lv * Config.PORTFOLIO_BOOST_PER_LEVEL;
     }
 
-    function passiveIncome() {
-        return totalContribution() * Config.PASSIVE_RATE * portfolioBoostMult();
+    /* ---- passive income (from cash outs) ---- */
+
+    function marketPassive(id) {
+        const m = def(id);
+        const mk = State.get().markets[id];
+        return (
+            Config.PASSIVE_RATE *
+            m.tierWeight *
+            Math.sqrt(Math.max(0, mk.lifetimeCashOut) / m.threshold)
+        );
     }
 
-    function isUnlocked(id) {
-        const m = def(id);
-        return State.get().total >= m.unlockAt;
+    function totalPassive() {
+        let sum = 0;
+        for (const m of Config.MARKETS) sum += marketPassive(m.id);
+        return sum * portfolioBoostMult();
     }
+
+    /* ---- unlocks ---- */
+
+    function isUnlocked(id) {
+        return State.get().total >= def(id).unlockAt;
+    }
+
+    /* ---- shares ---- */
 
     function shareUpgradeCost(id) {
         const shares = State.get().markets[id].shares;
@@ -109,11 +123,12 @@ export const Market = (() => {
         return true;
     }
 
+    /* ---- trading ---- */
+
     function buyUnits(id, n, t) {
         const s = State.get();
         const mk = s.markets[id];
-        const avail = mk.shares - mk.holding;
-        n = Math.min(n, avail);
+        n = Math.min(n, mk.shares - mk.holding);
         if (n <= 0) return { bought: 0, cost: 0 };
 
         const price = buyPrice(id, t);
@@ -157,8 +172,10 @@ export const Market = (() => {
         return { sold: n, gain, profit, price };
     }
 
+    /* ---- cash out ---- */
+
     function cashOutValue(id) {
-        const c = contribution(id);
+        const c = def(id);
         const s = State.get();
         const mk = s.markets[id];
         const holdSec = (Date.now() - (mk.lastCashOut || s.start)) / 1000;
@@ -168,18 +185,73 @@ export const Market = (() => {
             Math.pow(capped / 60, Config.CASHOUT_HOLD_EXP)
         );
         const entropyMult = 1 + s.entropy / Config.CASHOUT_ENTROPY_DIVISOR;
-        const base = c * Config.CASHOUT_BASE * portfolioBoostMult();
-        return base * entropyMult * holdBonus;
+        const shareM = shareMult(id);
+        const mult = marketMultiplier(id);
+        const mileBonus = 1 + mk.milestoneBonus;
+        const base = Config.CASHOUT_BASE * portfolioBoostMult();
+        return (
+            base *
+            shareM *
+            mult *
+            c.tierWeight *
+            entropyMult *
+            holdBonus *
+            mileBonus
+        );
     }
 
     function canCashOut(id) {
-        const s = State.get();
-        const mk = s.markets[id];
+        const mk = State.get().markets[id];
         if (mk.cashOutCooldown > 0)
             return { ok: false, reason: "cooldown", left: mk.cashOutCooldown };
-        if (contribution(id) <= 0.01)
-            return { ok: false, reason: "low-contribution" };
         return { ok: true };
+    }
+
+    /* ---- market reset (emergency recovery) ---- */
+
+    function resetAmount() {
+        const s = State.get();
+        return (
+            Config.RESET_BASE_Q * (1 + s.entropy * Config.PRICE_ENTROPY_GROWTH)
+        );
+    }
+
+    function canReset(id) {
+        const s = State.get();
+        const mk = s.markets[id];
+        if (mk.resetCooldown > 0)
+            return { ok: false, reason: "cooldown", left: mk.resetCooldown };
+        if (mk.holding > 0) return { ok: false, reason: "has-holding" };
+        if (mk.q >= Config.RESET_THRESHOLD_Q)
+            return { ok: false, reason: "has-q" };
+        return { ok: true };
+    }
+
+    function resetMarket(id) {
+        const check = canReset(id);
+        if (!check.ok) return { ok: false, reason: check.reason };
+
+        const s = State.get();
+        const mk = s.markets[id];
+        const amount = resetAmount();
+
+        /* Preserve shares (min 1), lifetimeProfit, lifetimeCashOut,
+       milestoneBonus, cashOutCount. Only q is refilled. */
+        mk.q = amount;
+        mk.shares = Math.max(1, mk.shares);
+        mk.resetCooldown = Config.RESET_COOLDOWN;
+
+        return { ok: true, amount };
+    }
+
+    function nextMilestoneProgress(id) {
+        const mk = State.get().markets[id];
+        const inCycle = mk.cashOutCount % Config.MILESTONE_EVERY;
+        return {
+            current: inCycle,
+            required: Config.MILESTONE_EVERY,
+            toNext: Config.MILESTONE_EVERY - inCycle
+        };
     }
 
     function cashOut(id) {
@@ -194,8 +266,34 @@ export const Market = (() => {
         s.total += value;
         mk.lastCashOut = Date.now();
         mk.cashOutCooldown = Config.CASHOUT_COOLDOWN;
-        return { ok: true, value };
+        mk.lifetimeCashOut += value;
+        mk.cashOutCount += 1;
+
+        let milestoneBonusQ = 0;
+        let milestoneHit = false;
+
+        if (mk.cashOutCount % Config.MILESTONE_EVERY === 0) {
+            milestoneBonusQ = value * Config.MILESTONE_BONUS_MULT;
+            s.Q += milestoneBonusQ;
+            s.total += milestoneBonusQ;
+            mk.milestoneBonus = Math.min(
+                Config.MILESTONE_PERM_CAP,
+                mk.milestoneBonus + Config.MILESTONE_PERM_BONUS
+            );
+            milestoneHit = true;
+        }
+
+        return {
+            ok: true,
+            value,
+            milestoneHit,
+            milestoneBonusQ,
+            newMilestoneBonus: mk.milestoneBonus,
+            cashOutCount: mk.cashOutCount
+        };
     }
+
+    /* ---- portfolio ---- */
 
     function portfolioBoostCost() {
         const lv = State.get().portfolioBoost || 0;
@@ -214,26 +312,26 @@ export const Market = (() => {
         return true;
     }
 
-    function unlockMarket(id) {
-        return isUnlocked(id);
-    }
-
     function totalShares() {
         let sum = 0;
         for (const m of Config.MARKETS) sum += State.get().markets[m.id].shares;
         return sum;
     }
 
+    /* ---- tick ---- */
+
     function tick(dt) {
         const s = State.get();
         s.entropy += Config.ENTROPY_BASE_RATE * dt;
-        const income = Config.BASE_INCOME + passiveIncome();
+        const income = totalPassive();
         s.Q += income * dt;
         s.total += income * dt;
         for (const m of Config.MARKETS) {
             const mk = s.markets[m.id];
             if (mk.cashOutCooldown > 0)
                 mk.cashOutCooldown = Math.max(0, mk.cashOutCooldown - dt);
+            if (mk.resetCooldown > 0)
+                mk.resetCooldown = Math.max(0, mk.resetCooldown - dt);
         }
     }
 
@@ -245,11 +343,11 @@ export const Market = (() => {
         movingAverage,
         buyPrice,
         sellPrice,
-        multiplier,
-        contribution,
-        totalContribution,
+        marketMultiplier,
+        shareMult,
         portfolioBoostMult,
-        passiveIncome,
+        marketPassive,
+        totalPassive,
         isUnlocked,
         shareUpgradeCost,
         upgradeShares,
@@ -257,10 +355,13 @@ export const Market = (() => {
         sellUnits,
         cashOutValue,
         canCashOut,
+        nextMilestoneProgress,
         cashOut,
+        resetAmount,
+        canReset,
+        resetMarket,
         portfolioBoostCost,
         upgradePortfolio,
-        unlockMarket,
         totalShares,
         tick
     };

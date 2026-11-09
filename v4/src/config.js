@@ -1,26 +1,22 @@
 export const Config = {
-    STARTING_Q: 1000,
-    BASE_INCOME: 0.5, // global Q/s floor
+    STARTING_Q: 0,
 
-    // Global pricing
-    BASE_PRICE: 100, // Q per unit at entropy 0
-    TRADING_FEE: 0.1, // 10% buy fee
-    PRICE_ENTROPY_GROWTH: 0.005, // +0.5% base per entropy
+    BASE_PRICE: 100,
+    TRADING_FEE: 0.1,
+    PRICE_ENTROPY_GROWTH: 0.005,
 
-    // Wave shape
     WEATHER_AMP_1: 0.3,
     WEATHER_PERIOD_1: 75,
     WEATHER_AMP_2: 0.12,
     WEATHER_PERIOD_2: 23,
     NOISE_AMP: 0.05,
 
-    // Per-market starting resources
-    STARTING_Q_PER_MARKET: 1000,
+    STARTING_Q_PER_MARKET: 100,
     STARTING_SHARES: 5,
     SHARE_UPGRADE_BASE: 100,
     SHARE_UPGRADE_MULT: 1.8,
+    SHARE_MULT_BONUS: 0.15,
 
-    // Markets
     MARKETS: [
         {
             id: "calm",
@@ -60,24 +56,34 @@ export const Config = {
         }
     ],
 
-    // Multiplier → Big Q bridge
-    PASSIVE_RATE: 0.3, // Q/s per contribution unit
-    CASHOUT_BASE: 100, // Q per contribution unit
-    CASHOUT_COOLDOWN: 60,
-    CASHOUT_ENTROPY_DIVISOR: 100, // entropy 100 = ×2 multiplier
-    CASHOUT_HOLD_EXP: 0.8,
+    // Passive income comes from lifetime cash outs per market
+    PASSIVE_RATE: 4,
+    CASHOUT_BASE: 100,
+    CASHOUT_COOLDOWN: 30,
+    CASHOUT_ENTROPY_DIVISOR: 100,
+    CASHOUT_HOLD_EXP: 1.2,
     CASHOUT_HOLD_CAP_SEC: 4 * 3600,
 
-    // Entropy
-    ENTROPY_BASE_RATE: 0.02, // per second
-    ENTROPY_PER_TRADE: 0.02, // per profitable trade
+    // Milestones
+    MILESTONE_EVERY: 10,
+    MILESTONE_BONUS_MULT: 3,
+    MILESTONE_PERM_BONUS: 0.02,
+    MILESTONE_PERM_CAP: 0.5,
+    
+    // Market reset (emergency recovery when stuck)
+    RESET_BASE_Q: 100,        // reset q amount at entropy 0 (scales with entropy)
+    RESET_COOLDOWN: 60,       // seconds per market
+    RESET_THRESHOLD_Q: 50,    // trigger: q < this
+    RESET_THRESHOLD_BIG_Q: 100, // trigger: bigQ < this
+    
+    ENTROPY_BASE_RATE: 0.02,
+    ENTROPY_PER_TRADE: 0.02,
 
-    // Portfolio upgrade: Boost (multiplies all contributions)
-    PORTFOLIO_BOOST_BASE: 10000,
+    PORTFOLIO_BOOST_BASE: 3000,
     PORTFOLIO_BOOST_MULT: 2.5,
     PORTFOLIO_BOOST_PER_LEVEL: 0.15,
 
-    SAVE_KEY: "quanta_portfolio_v1"
+    SAVE_KEY: "quanta_portfolio_v2"
 };
 
 export const State = (() => {
@@ -88,15 +94,20 @@ export const State = (() => {
             holding: 0,
             costBasis: 0,
             lifetimeProfit: 0,
+            lifetimeCashOut: 0,
+            cashOutCount: 0,
+            milestoneBonus: 0,
             lastBuyPrice: 0,
             lastBuyTime: 0,
             lastSellProfit: 0,
             lastSellTotal: 0,
             lastSellTime: 0,
             lastCashOut: 0,
-            cashOutCooldown: 0
+            cashOutCooldown: 0,
+            resetCooldown: 0
         };
     }
+
     function blank() {
         const markets = {};
         for (const m of Config.MARKETS) markets[m.id] = blankMarket();
@@ -126,8 +137,10 @@ export const State = (() => {
 export const Save = (() => {
     const KEY = Config.SAVE_KEY;
     const num = v => (Number.isFinite(+v) ? +v : 0);
+    let disabled = false;
 
     function write() {
+        if (disabled) return;
         const s = State.get();
         s.lastSave = Date.now();
         try {
@@ -164,13 +177,20 @@ export const Save = (() => {
                 holding: Math.max(0, Math.floor(num(saved.holding))),
                 costBasis: num(saved.costBasis),
                 lifetimeProfit: num(saved.lifetimeProfit),
+                lifetimeCashOut: num(saved.lifetimeCashOut),
+                cashOutCount: Math.max(0, Math.floor(num(saved.cashOutCount))),
+                milestoneBonus: Math.min(
+                    Config.MILESTONE_PERM_CAP,
+                    Math.max(0, num(saved.milestoneBonus))
+                ),
                 lastBuyPrice: num(saved.lastBuyPrice),
                 lastBuyTime: num(saved.lastBuyTime),
                 lastSellProfit: num(saved.lastSellProfit),
                 lastSellTotal: num(saved.lastSellTotal),
                 lastSellTime: num(saved.lastSellTime),
                 lastCashOut: num(saved.lastCashOut),
-                cashOutCooldown: Math.max(0, num(saved.cashOutCooldown))
+                cashOutCooldown: Math.max(0, num(saved.cashOutCooldown)),
+                resetCooldown: Math.max(0, num(saved.resetCooldown))
             };
         }
 
@@ -196,5 +216,9 @@ export const Save = (() => {
         } catch (e) {}
     }
 
-    return { write, read, wipe };
+    function disable() {
+        disabled = true;
+    }
+
+    return { write, read, wipe, disable };
 })();

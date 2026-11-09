@@ -18,7 +18,7 @@
     <script src="https://twaddler01.github.io/mobile-dev-console/releases/v1.0.1/errorBootstrap.js"></script>
 
     <script type="module">
-        const debug = false;
+        const debug = true;
         
         if (debug) {
             try {
@@ -41,6 +41,7 @@
     
                 // Initialize the application after DevTools.
                 await import("./src/main.js");
+                await import("./debug.js");
             } catch (error) {
                 if (window.devConsole) {
                     window.devConsole.error(error);

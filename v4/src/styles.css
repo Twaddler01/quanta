@@ -420,6 +420,7 @@ body {
     cursor: pointer;
 }
 
+/* Toast milestone styling — slightly bigger/longer on hit */
 #toast {
     position: fixed;
     left: 50%;
@@ -444,4 +445,112 @@ body {
 #toast.show {
     opacity: 1;
     transform: translate(-50%, 0);
+}
+
+/* Header update: PORTFOLIO label above */
+.qlabel-top {
+    font-size: 9.5px;
+    letter-spacing: 0.34em;
+    color: var(--dim);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+.qval {
+    font-family: var(--mono);
+    font-size: clamp(28px, 10vw, 44px);
+    font-weight: 700;
+    line-height: 1.05;
+    color: #fff;
+    text-shadow: 0 0 22px rgba(63, 233, 255, 0.5);
+}
+.qval-unit {
+    font-size: 0.55em;
+    color: var(--dim);
+    font-weight: 600;
+}
+
+/* Cash out meta row */
+.cashout-meta {
+    margin-top: 6px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--dim);
+    text-align: center;
+}
+
+/* Milestone row */
+.milestone-row {
+    margin-top: 6px;
+    margin-bottom: 4px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--cost);
+    text-align: center;
+    line-height: 1.4;
+}
+
+/* Portfolio total line */
+.portfolio-total {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--market);
+    text-align: center;
+    padding: 8px 0;
+    margin: 6px 0;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+}
+
+/* Market reset (emergency recovery) */
+.reset-market-btn {
+    width: 100%;
+    padding: 12px 14px;
+    margin-top: 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(249, 115, 22, 0.6);
+    background: linear-gradient(
+        180deg,
+        rgba(249, 115, 22, 0.18),
+        rgba(249, 115, 22, 0.04)
+    );
+    color: #fff;
+    font-family: inherit;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition:
+        border-color 0.15s,
+        box-shadow 0.15s;
+    animation: resetPulse 2s ease-in-out infinite;
+}
+.reset-market-btn:active {
+    transform: scale(0.985);
+}
+.reset-market-btn:hover {
+    border-color: rgba(249, 115, 22, 0.9);
+}
+.reset-market-btn.hidden {
+    display: none;
+}
+.rm-label {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+}
+.rm-amount {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--entropy);
+}
+@keyframes resetPulse {
+    0%,
+    100% {
+        box-shadow: 0 0 12px rgba(249, 115, 22, 0.15);
+    }
+    50% {
+        box-shadow: 0 0 22px rgba(249, 115, 22, 0.35);
+    }
 }
