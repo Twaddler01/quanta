@@ -569,6 +569,121 @@ body {
     animation: cashoutReady 2s ease-in-out infinite;
 }
 @keyframes cashoutReady {
-    0%, 100% { box-shadow: 0 0 18px rgba(255, 209, 102, 0.2); }
-    50%      { box-shadow: 0 0 26px rgba(255, 209, 102, 0.45); }
+    0%,
+    100% {
+        box-shadow: 0 0 18px rgba(255, 209, 102, 0.2);
+    }
+    50% {
+        box-shadow: 0 0 26px rgba(255, 209, 102, 0.45);
+    }
+}
+
+/* ============================================================
+   v5.1 — Market status row + growth/markets pills
+   ============================================================ */
+
+/* Market status row (shares / pool / interest, above chart) */
+.market-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 8px;
+    margin-bottom: 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--dim);
+    line-height: 1.4;
+}
+.ms-item {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 3px;
+}
+.ms-k {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--dim);
+}
+.ms-v {
+    color: var(--txt);
+    font-weight: 600;
+}
+.ms-sep {
+    color: var(--dim2);
+    font-size: 10px;
+}
+
+/* Growth pill — cyan when positive, pink when negative */
+.pill.income .v {
+    transition: color 0.2s;
+}
+
+/* Markets pill — green like shares pill */
+.pill.shares .v {
+    transition: color 0.2s;
+}
+
+/* ============================================================
+   v5.2 — Cash out progress bar
+   ============================================================ */
+
+.cashout-btn {
+    position: relative;
+    overflow: hidden;
+}
+
+.co-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 0;
+    background: linear-gradient(90deg,
+        rgba(74, 222, 128, 0.18) 0%,
+        rgba(74, 222, 128, 0.30) 100%);
+    transition: width 0.4s ease;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.cashout-btn.poor .co-fill {
+    background: linear-gradient(90deg,
+        rgba(74, 222, 128, 0.10) 0%,
+        rgba(74, 222, 128, 0.22) 100%);
+}
+
+.cashout-btn.can .co-fill,
+.cashout-btn.full .co-fill {
+    background: linear-gradient(90deg,
+        rgba(74, 222, 128, 0.28) 0%,
+        rgba(74, 222, 128, 0.45) 100%);
+}
+
+.cashout-btn .co-label,
+.cashout-btn .co-amount {
+    position: relative;
+    z-index: 1;
+}
+
+.cashout-btn.poor .co-label,
+.cashout-btn.poor .co-amount {
+    color: var(--dim);
+}
+
+.cashout-btn.poor {
+    border-color: rgba(74, 222, 128, 0.28);
+    background: linear-gradient(180deg, rgba(30, 45, 65, 0.5), rgba(11, 18, 32, 0.6));
+    opacity: 1;
+}
+
+.cashout-btn.can .co-label,
+.cashout-btn.full .co-label {
+    color: #fff;
+    text-shadow: 0 0 8px rgba(74, 222, 128, 0.6);
+}
+
+.cashout-btn.can .co-amount,
+.cashout-btn.full .co-amount {
+    color: var(--good);
+    text-shadow: 0 0 10px rgba(74, 222, 128, 0.5);
 }

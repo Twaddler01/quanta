@@ -61,6 +61,7 @@ export const Config = {
     INTEREST_COEF: 0.02, // interest rate per second at fresh trade
     INTEREST_WINDOW_SEC: 60, // window before interest hits 0
     CASHOUT_FULL_THRESHOLD: 1, // pool must be ≥ this % of poolMax to cash out
+    CASHOUT_COOLDOWN: 5, // brief cooldown after cash out (pool reset is the real gate)
 
     /* ---- Milestones (unchanged from v4) ---- */
     MILESTONE_EVERY: 10,
@@ -115,6 +116,7 @@ export const State = (() => {
         return {
             Q: Config.STARTING_Q,
             total: Config.STARTING_Q,
+            lastGrowthPct: 0,
             portfolioBoost: 0,
             interestBooster: 0,
             activeMarket: "calm",
@@ -201,6 +203,7 @@ export const Save = (() => {
         State.replace({
             Q: num(p.Q) || def.Q,
             total: num(p.total) || def.total,
+            lastGrowthPct: num(p.lastGrowthPct),
             portfolioBoost: Math.max(0, Math.floor(num(p.portfolioBoost))),
             interestBooster: Math.max(0, Math.floor(num(p.interestBooster))),
             activeMarket: Config.MARKETS.some(m => m.id === p.activeMarket)

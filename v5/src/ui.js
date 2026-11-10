@@ -15,6 +15,7 @@ export const UI = (() => {
         toastEl = div({ id: "toast" });
         document.body.appendChild(toastEl);
 
+        /* ---- Global HUD ---- */
         const hud = el("header", { id: "hud" }, [
             div({ className: "qlabel-top" }, "PORTFOLIO"),
             div({ className: "qval" }, [
@@ -22,11 +23,12 @@ export const UI = (() => {
                 span({ className: "qval-unit" }, " Q")
             ]),
             div({ className: "hud-sub" }, [
-                pill("INTEREST", "interestPill", "income"),
-                pill("SHARES", "sharesPill", "shares")
+                pill("GROWTH", "growthPill", "income"),
+                pill("MARKETS", "marketsPill", "shares")
             ])
         ]);
 
+        /* ---- Market chips ---- */
         const chips = el("div", {
             className: "market-chips",
             id: "marketChips"
@@ -49,6 +51,29 @@ export const UI = (() => {
 
         canvas = el("canvas", { id: "chart" });
 
+        /* ---- Market status row ---- */
+        const marketStatus = el(
+            "div",
+            { className: "market-status", id: "marketStatus" },
+            [
+                span({ className: "ms-item" }, [
+                    span({ className: "ms-k" }, "SHARES "),
+                    span({ className: "ms-v", id: "statusShares" }, "—")
+                ]),
+                span({ className: "ms-sep" }, "·"),
+                span({ className: "ms-item" }, [
+                    span({ className: "ms-k" }, "POOL "),
+                    span({ className: "ms-v", id: "statusPool" }, "—")
+                ]),
+                span({ className: "ms-sep" }, "·"),
+                span({ className: "ms-item" }, [
+                    span({ className: "ms-k" }, "INTEREST "),
+                    span({ className: "ms-v", id: "statusInterest" }, "—")
+                ])
+            ]
+        );
+
+        /* ---- Trade buttons ---- */
         const tradeBlock = el("div", { className: "trade-grid" }, [
             btn("BUY 1", "buy1", "buy"),
             btn("BUY MAX", "buyMax", "buy"),
@@ -56,21 +81,21 @@ export const UI = (() => {
             btn("SELL ALL", "sellAll", "sell")
         ]);
 
+        /* ---- Stats ---- */
         const statRows = el("div", { className: "stat-block" }, [
+            row("Holding", "holdingRow"),
+            row("Cost", "costRow"),
+            row("P/L", "plRow"),
+            div({ className: "stat-sep" }),
             row("Wallet", "walletRow"),
-            row("Position", "positionRow"),
-            row("Avg cost", "avgCostRow"),
-            row("Last sell", "lastSellRow"),
-            div({ className: "stat-sep" }),
-            row("Pool", "poolRow"),
-            row("Interest", "interestRow"),
-            div({ className: "stat-sep" }),
             row("Current", "currentRow"),
             row("MA (5m)", "maRow"),
             div({ className: "stat-sep" }),
-            row("Lifetime cash outs", "lifetimeRow")
+            row("Last sell", "lastSellRow"),
+            row("Lifetime", "lifetimeRow")
         ]);
 
+        /* ---- Active market header ---- */
         const activeTitle = el("div", { className: "panel-title" }, "Market");
         const activeSubtitle = el(
             "div",
@@ -78,6 +103,19 @@ export const UI = (() => {
             "—"
         );
 
+        /* ---- Cash out with progress fill ---- */
+        const cashOutFill = el("div", {
+            className: "co-fill",
+            id: "cashOutFill"
+        });
+        const cashOutLabel = span(
+            { className: "co-label", id: "cashOutLabel" },
+            "CASH POOL 0%"
+        );
+        const cashOutAmount = span(
+            { className: "co-amount", id: "cashOutAmount" },
+            "—"
+        );
         const cashOutBtn = el(
             "button",
             {
@@ -87,11 +125,9 @@ export const UI = (() => {
                     actions.cashOut(State.get().activeMarket);
                 }
             },
-            [
-                span({ className: "co-label" }, "CASH OUT"),
-                span({ className: "co-amount", id: "cashOutAmount" }, "—")
-            ]
+            [cashOutFill, cashOutLabel, cashOutAmount]
         );
+
         const cashOutMeta = el(
             "div",
             { className: "cashout-meta", id: "cashOutMeta" },
@@ -103,6 +139,7 @@ export const UI = (() => {
             "—"
         );
 
+        /* ---- Market reset ---- */
         const resetMarketBtn = el(
             "button",
             {
@@ -128,6 +165,7 @@ export const UI = (() => {
             ]
         );
 
+        /* ---- Share upgrade ---- */
         const upgradeBtn = el(
             "button",
             {
@@ -144,9 +182,11 @@ export const UI = (() => {
             ]
         );
 
+        /* ---- Assemble market panel ---- */
         const activePanel = el("div", { className: "panel market-panel" }, [
             activeTitle,
             activeSubtitle,
+            marketStatus,
             el("div", { className: "chart-wrap" }, [canvas]),
             statRows,
             tradeBlock,
@@ -157,7 +197,7 @@ export const UI = (() => {
             upgradeBtn
         ]);
 
-        /* Portfolio panel */
+        /* ---- Portfolio panel ---- */
         const contributionRows = el("div", {
             className: "portfolio-rows",
             id: "portfolioRows"
@@ -170,7 +210,7 @@ export const UI = (() => {
         const portfolioHint = el(
             "div",
             { className: "hint" },
-            "Trades feed each market's pool. Interest accrues for 60s after a trade. Cash out to convert pool → Q."
+            "Trades feed each market's pool. Interest accrues for 60s after a trade. Cash out when pool is full."
         );
 
         const boostBtn = el(
@@ -214,6 +254,7 @@ export const UI = (() => {
             interestBtn
         ]);
 
+        /* ---- Reset save ---- */
         const resetBtn = el(
             "button",
             {
@@ -406,13 +447,28 @@ export const UI = (() => {
         const mk = s.markets[id];
         const t = Date.now() / 1000;
 
-        /* header */
+        /* ============ Global HUD ============ */
         $("#bigQ").textContent = Format.num(s.Q);
-        $("#interestPill").textContent =
-            "+" + Format.num(Market.totalInterestRate()) + " q/s";
-        $("#sharesPill").textContent = Market.totalShares().toString();
 
-        /* chips */
+        const growthEl = $("#growthPill");
+        const growthPct = s.lastGrowthPct || 0;
+        if (s.total <= 1 || Math.abs(growthPct) < 0.01) {
+            growthEl.textContent = "—";
+            growthEl.style.color = "var(--dim2)";
+        } else {
+            growthEl.textContent =
+                (growthPct >= 0 ? "+" : "") + growthPct.toFixed(1) + "%";
+            growthEl.style.color =
+                growthPct > 0 ? "var(--quanta)" : "var(--surge)";
+        }
+
+        const unlockedCount = Config.MARKETS.filter(m =>
+            Market.isUnlocked(m.id)
+        ).length;
+        $("#marketsPill").textContent =
+            unlockedCount + "/" + Config.MARKETS.length;
+
+        /* ============ Market chips ============ */
         for (const m of Config.MARKETS) {
             const unlocked = Market.isUnlocked(m.id);
             const chip = marketChipEls[m.id];
@@ -421,21 +477,21 @@ export const UI = (() => {
             const sub = $("#chip-" + m.id);
             if (unlocked) {
                 const mk2 = s.markets[m.id];
-                const cap = Market.poolMax(m.id);
+                const cap2 = Market.poolMax(m.id);
                 sub.textContent =
                     "×" +
                     Format.plain(Market.marketMultiplier(m.id)) +
                     " · " +
                     Format.num(mk2.pool) +
                     "/" +
-                    Format.num(cap) +
+                    Format.num(cap2) +
                     "q";
             } else {
                 sub.textContent = "unlock " + Format.num(m.unlockAt) + " Q";
             }
         }
 
-        /* active market header */
+        /* ============ Market header ============ */
         const mDef = Market.def(id);
         $("#activeMarketName").textContent =
             mDef.name +
@@ -443,19 +499,93 @@ export const UI = (() => {
             Format.plain(Market.marketMultiplier(id)) +
             " mult";
 
-        /* stats */
-        $("#walletRow").textContent = Format.num(mk.q) + " q";
-        $("#positionRow").textContent =
-            mk.holding +
+        /* ============ Market status row ============ */
+        $("#statusShares").textContent = mk.shares;
+
+        const cap = Market.poolMax(id);
+        const poolPct = cap > 0 ? (mk.pool / cap) * 100 : 0;
+        const fullPct = Config.CASHOUT_FULL_THRESHOLD * 100;
+        const statusPoolEl = $("#statusPool");
+        statusPoolEl.textContent =
+            Format.num(mk.pool) +
             "/" +
-            mk.shares +
-            " held" +
-            (mk.holding > 0
-                ? " · Ⓠ " + Format.num(mk.costBasis) + " cost"
-                : "");
-        const avg = mk.holding > 0 ? mk.costBasis / mk.holding : 0;
-        $("#avgCostRow").textContent =
-            avg > 0 ? Format.num(avg) + " Q/unit" : "—";
+            Format.num(cap) +
+            " (" +
+            poolPct.toFixed(0) +
+            "%)";
+        statusPoolEl.style.color =
+            poolPct >= 99.5
+                ? "var(--cost)"
+                : poolPct >= fullPct
+                  ? "var(--good)"
+                  : poolPct >= 50
+                    ? "var(--txt)"
+                    : "";
+
+        const rate = Market.currentInterestRate(id);
+        const statusIntEl = $("#statusInterest");
+        if (rate > 0.01) {
+            const secs = Math.ceil(
+                Math.max(0, (mk.interestExpiresAt - Date.now()) / 1000)
+            );
+            statusIntEl.textContent =
+                "+" + Format.num(rate) + "/s (" + secs + "s)";
+            statusIntEl.style.color = "var(--good)";
+        } else {
+            statusIntEl.textContent = "inactive";
+            statusIntEl.style.color = "var(--dim2)";
+        }
+
+        /* ============ Market stats ============ */
+        const buyP = Market.buyPrice(id, t);
+        const sellP = Market.sellPrice(id)(t);
+        const ma = Market.movingAverage(id, t);
+        const curP = Market.naturalPrice(id, t);
+
+        $("#holdingRow").textContent = mk.holding + "/" + mk.shares + " units";
+
+        if (mk.holding > 0) {
+            const avg = mk.costBasis / mk.holding;
+            $("#costRow").textContent =
+                "Ⓠ " +
+                Format.num(avg) +
+                " /unit · Ⓠ " +
+                Format.num(mk.costBasis) +
+                " total";
+
+            const pl = mk.holding * sellP - mk.costBasis;
+            const plPct = mk.costBasis > 0 ? (pl / mk.costBasis) * 100 : 0;
+            const plEl = $("#plRow");
+            plEl.textContent =
+                (pl >= 0 ? "+" : "−") +
+                "Ⓠ " +
+                Format.num(Math.abs(pl)) +
+                " (" +
+                (plPct >= 0 ? "+" : "−") +
+                Math.abs(plPct).toFixed(1) +
+                "%)";
+            plEl.style.color =
+                pl > 0.01 ? "var(--good)" : pl < -0.01 ? "var(--surge)" : "";
+        } else {
+            $("#costRow").textContent = "—";
+            const plEl = $("#plRow");
+            plEl.textContent = "—";
+            plEl.style.color = "";
+        }
+
+        $("#walletRow").textContent = Format.num(mk.q) + " q";
+        $("#currentRow").textContent = "Ⓠ " + Format.num(curP);
+        const vsMa = ma > 0 ? ((curP - ma) / ma) * 100 : 0;
+        $("#maRow").textContent =
+            "Ⓠ " +
+            Format.num(ma) +
+            " · " +
+            (vsMa >= 0 ? "+" : "") +
+            vsMa.toFixed(1) +
+            "% " +
+            (vsMa >= 0 ? "over" : "under");
+        $("#maRow").style.color =
+            vsMa < -2 ? "var(--good)" : vsMa > 2 ? "var(--cost)" : "var(--txt)";
 
         if (mk.lastSellTime > 0) {
             const p = mk.lastSellProfit;
@@ -480,63 +610,16 @@ export const UI = (() => {
             $("#lastSellRow").style.color = "";
         }
 
-        /* pool + interest */
-        const cap = Market.poolMax(id);
-        const poolPct = cap > 0 ? (mk.pool / cap) * 100 : 0;
-        const fullPct = Config.CASHOUT_FULL_THRESHOLD * 100;
-        let poolLabel = Format.num(mk.pool) + " / " + Format.num(cap) + " q · " + poolPct.toFixed(0) + "%";
-        if (poolPct >= 99.5) poolLabel += " · FULL";
-        else if (poolPct >= fullPct) poolLabel += " · READY";
-        $("#poolRow").textContent = poolLabel;
-        $("#poolRow").style.color =
-            poolPct >= 99.5 ? "var(--cost)"
-            : poolPct >= fullPct ? "var(--good)"
-            : poolPct >= 50 ? "var(--txt)"
-            : "";
-
-        const rate = Market.currentInterestRate(id);
-        $("#interestRow").textContent =
-            rate > 0.01
-                ? "+" +
-                  Format.num(rate) +
-                  " q/s · " +
-                  Math.ceil(
-                      Math.max(0, (mk.interestExpiresAt - Date.now()) / 1000)
-                  ) +
-                  "s"
-                : "— (trade to activate)";
-        $("#interestRow").style.color =
-            rate > 0.01 ? "var(--good)" : "var(--dim2)";
-
-        /* Current price + MA */
-        const buyP = Market.buyPrice(id, t);
-        const sellP = Market.sellPrice(id)(t);
-        const ma = Market.movingAverage(id, t);
-        const curP = Market.naturalPrice(id, t);
-
-        $("#currentRow").textContent = "Ⓠ " + Format.num(curP);
-        const vsMa = ma > 0 ? ((curP - ma) / ma) * 100 : 0;
-        $("#maRow").textContent =
-            "Ⓠ " +
-            Format.num(ma) +
-            " · " +
-            (vsMa >= 0 ? "+" : "") +
-            vsMa.toFixed(1) +
-            "% " +
-            (vsMa >= 0 ? "over" : "under");
-        $("#maRow").style.color =
-            vsMa < -2 ? "var(--good)" : vsMa > 2 ? "var(--cost)" : "var(--txt)";
-
-        /* Lifetime cash outs */
         $("#lifetimeRow").textContent =
             Format.num(mk.lifetimeCashOut) +
             " Q · " +
             mk.cashOutCount +
             " cash outs";
 
-        /* trade buttons */
+        /* ============ Trade buttons ============ */
         const canBuy = mk.holding < mk.shares && mk.q >= buyP;
         const canSell = mk.holding > 0;
+
         $("#buy1Amount").textContent = "Ⓠ " + Format.num(buyP);
         const maxAfford = Math.min(
             mk.shares - mk.holding,
@@ -558,24 +641,35 @@ export const UI = (() => {
         $("#sellAll").classList.toggle("can", canSell);
         $("#sellAll").classList.toggle("poor", !canSell);
 
-        /* cash out — gated on pool being full */
+        /* ============ Cash out progress bar ============ */
         const cCheck = Market.canCashOut(id);
         const coBtn = $("#cashOutBtn");
+        const coFill = $("#cashOutFill");
+        const coLabel = $("#cashOutLabel");
         const coAmt = $("#cashOutAmount");
+        const val = Market.cashOutValue(id);
+
+        const pct = Math.min(100, cCheck.pct || 0);
+        coFill.style.width = pct + "%";
+
         if (cCheck.ok) {
-            const val = Market.cashOutValue(id);
-            coAmt.textContent = "+" + Format.num(val) + " Q · FULL";
-            coBtn.classList.add("can");
+            coLabel.textContent = "CASH OUT";
+            coAmt.textContent = "+" + Format.num(val) + " Q";
+            coBtn.classList.add("can", "full");
             coBtn.classList.remove("poor");
-        } else {
-            coBtn.classList.remove("can");
+        } else if (cCheck.reason === "cooldown") {
+            coLabel.textContent = "COOLDOWN " + Math.ceil(cCheck.left) + "s";
+            coAmt.textContent = "—";
+            coBtn.classList.remove("can", "full");
             coBtn.classList.add("poor");
-            const pct = Math.min(100, Math.round(cCheck.pct));
-            const need = Math.round(Config.CASHOUT_FULL_THRESHOLD * 100);
-            coAmt.textContent = "POOL " + pct + "% · NEED " + need + "%";
+        } else {
+            coLabel.textContent = "CASH POOL " + Math.round(pct) + "%";
+            coAmt.textContent = "+" + Format.num(val) + " Q";
+            coBtn.classList.remove("can", "full");
+            coBtn.classList.add("poor");
         }
 
-        /* cash out meta + milestone */
+        /* ============ Cash out meta + milestone ============ */
         const prog = Market.nextMilestoneProgress(id);
         $("#cashOutMeta").textContent =
             "Lifetime: " +
@@ -603,7 +697,7 @@ export const UI = (() => {
                   " cash out" +
                   (prog.toNext === 1 ? "" : "s");
 
-        /* market reset */
+        /* ============ Market reset ============ */
         const rCheck = Market.canReset(id);
         const rBtn = $("#resetMarketBtn");
         if (rCheck.ok) {
@@ -614,7 +708,7 @@ export const UI = (() => {
             rBtn.classList.add("hidden");
         }
 
-        /* upgrade shares */
+        /* ============ Share upgrade ============ */
         const upCost = Market.shareUpgradeCost(id);
         const newCap = mk.shares + 1;
         const shareBonusPct = Math.round(
@@ -631,7 +725,7 @@ export const UI = (() => {
         $("#upgradeShareBtn").classList.toggle("can", mk.q >= upCost);
         $("#upgradeShareBtn").classList.toggle("poor", mk.q < upCost);
 
-        /* portfolio rows */
+        /* ============ Portfolio rows ============ */
         const rows = [];
         for (const m of Config.MARKETS) {
             const unlocked = Market.isUnlocked(m.id);
@@ -674,7 +768,7 @@ export const UI = (() => {
             ) +
             " q";
 
-        /* portfolio boost */
+        /* ============ Portfolio upgrades ============ */
         const bCost = Market.portfolioBoostCost();
         $("#boostDesc").textContent =
             "LV " +
@@ -685,7 +779,6 @@ export const UI = (() => {
         $("#portfolioBoostBtn").classList.toggle("can", s.Q >= bCost);
         $("#portfolioBoostBtn").classList.toggle("poor", s.Q < bCost);
 
-        /* interest booster */
         const iCost = Market.interestBoosterCost();
         $("#interestDesc").textContent =
             "LV " +

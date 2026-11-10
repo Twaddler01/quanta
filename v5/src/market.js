@@ -200,6 +200,17 @@ export const Market = (() => {
 
     function canCashOut(id) {
         const mk = State.get().markets[id];
+    
+        if (mk.cashOutCooldown > 0) {
+            const cap0 = poolMax(id);
+            return {
+                ok: false,
+                reason: "cooldown",
+                left: mk.cashOutCooldown,
+                pct: cap0 > 0 ? (mk.pool / cap0) * 100 : 0
+            };
+        }
+    
         const cap = poolMax(id);
         const threshold = cap * Config.CASHOUT_FULL_THRESHOLD;
         if (mk.pool < threshold) {
@@ -232,17 +243,19 @@ export const Market = (() => {
         const s = State.get();
         const mk = s.markets[id];
         const value = cashOutValue(id);
+        const qBefore = s.Q;
 
         s.Q += value;
         s.total += value;
+        mk.lastCashOut = Date.now();
+        mk.cashOutCooldown = Config.CASHOUT_COOLDOWN;
+        mk.lifetimeCashOut += value;
+        mk.cashOutCount += 1;
 
-        /* Empty pool, clear interest */
+        /* ---- Reset pool + interest window after cash out ---- */
         mk.pool = 0;
         mk.recentProfit = 0;
         mk.interestExpiresAt = 0;
-        mk.lastCashOut = Date.now();
-        mk.lifetimeCashOut += value;
-        mk.cashOutCount += 1;
 
         let milestoneBonusQ = 0;
         let milestoneHit = false;
@@ -255,6 +268,12 @@ export const Market = (() => {
                 mk.milestoneBonus + Config.MILESTONE_PERM_BONUS
             );
             milestoneHit = true;
+        }
+
+        /* Track growth % — how much Q grew relative to before this cash out.
+   Skip if qBefore is too small (first cash out from 0 Q). */
+        if (qBefore > 1) {
+            s.lastGrowthPct = ((value + milestoneBonusQ) / qBefore) * 100;
         }
 
         return {
