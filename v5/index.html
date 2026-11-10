@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <meta name="theme-color" content="#070a14" />
+  <title>QUANTA — Portfolio</title>
+  <link rel="stylesheet" href="./src/styles.css" />
+</head>
+<body>
+    <!-- Required by errorBootstrap.js -->
+    <div id="productionErrorLog"></div>
+
+    <!-- Mount point for embedded mode -->
+    <div id="devtools"></div>
+
+    <!-- Install error listeners before application startup -->
+    <script src="https://twaddler01.github.io/mobile-dev-console/releases/v1.0.1/errorBootstrap.js"></script>
+
+    <script type="module">
+        const debug = true;
+        
+        if (debug) {
+            try {
+                const { DevTools } = await import(
+                    "https://twaddler01.github.io/mobile-dev-console/releases/v1.0.1/DevTools.js"
+                );
+    
+                const devTools = DevTools.mount({
+                    mode: "embedded",
+                    mountPoint: "#devtools",
+                    height: "60dvh",
+                    captureConsole: true,
+                    mirrorToNative: false,
+                    showCopyButtons: false,
+                    allowDragOutsideBounds: true
+                });
+    
+                // Optional: expose the instance to application code.
+                window.devTools = devTools;
+    
+                // Initialize the application after DevTools.
+                await import("./src/main.js");
+                await import("./debug.js");
+            } catch (error) {
+                if (window.devConsole) {
+                    window.devConsole.error(error);
+                } else if (window.showFatalError) {
+                    window.showFatalError(
+                        "Application Startup Failed",
+                        error
+                    );
+                } else {
+                    console.error(error);
+                }
+            }
+        } else {
+            await import("./src/main.js");
+        }
+    </script>
+</body>
+</html>
