@@ -141,12 +141,12 @@ export const Market = (() => {
 
     /* ---- trading ---- */
 
-    function buyUnits(id, n, t) {
+    function buyUnits(id, n, t, priceOverride = null) {
         const s = State.get();
         const mk = s.markets[id];
         n = Math.min(n, mk.shares - mk.holding);
         if (n <= 0) return { bought: 0, cost: 0 };
-        const price = buyPrice(id, t);
+        const price = priceOverride ?? buyPrice(id, t);
         const maxAfford = Math.floor(mk.q / price);
         n = Math.min(n, maxAfford);
         if (n <= 0) return { bought: 0, cost: 0 };
@@ -159,12 +159,12 @@ export const Market = (() => {
         return { bought: n, cost, price };
     }
 
-    function sellUnits(id, n, t) {
+    function sellUnits(id, n, t, priceOverride = null) {
         const s = State.get();
         const mk = s.markets[id];
         n = Math.min(n, mk.holding);
         if (n <= 0) return { sold: 0, gain: 0, profit: 0 };
-        const price = sellPrice(id)(t);
+        const price = priceOverride ?? sellPrice(id)(t);
         const gain = n * price;
         const avgCost = mk.holding > 0 ? mk.costBasis / mk.holding : 0;
         const profit = n * (price - avgCost);
@@ -200,15 +200,19 @@ export const Market = (() => {
 
     function canCashOut(id) {
         const mk = State.get().markets[id];
-        if (mk.pool < Config.CASHOUT_MIN_POOL) {
+        const cap = poolMax(id);
+        const threshold = cap * Config.CASHOUT_FULL_THRESHOLD;
+        if (mk.pool < threshold) {
             return {
                 ok: false,
-                reason: "low-pool",
-                min: Config.CASHOUT_MIN_POOL,
-                current: mk.pool
+                reason: "not-full",
+                current: mk.pool,
+                required: threshold,
+                cap,
+                pct: cap > 0 ? (mk.pool / cap) * 100 : 0
             };
         }
-        return { ok: true };
+        return { ok: true, pct: cap > 0 ? (mk.pool / cap) * 100 : 100 };
     }
 
     function nextMilestoneProgress(id) {
@@ -334,9 +338,9 @@ export const Market = (() => {
 
     /* ---- tick ---- */
 
-    function tick(dt) {
+    function tick(dt, nowOverride = null) {
         const s = State.get();
-        const now = Date.now();
+        const now = nowOverride ?? Date.now();
         for (const m of Config.MARKETS) {
             const mk = s.markets[m.id];
             if (mk.cashOutCooldown > 0)

@@ -53,8 +53,8 @@ export const Game = (() => {
             Save.write();
             UI.render();
         } else {
-            if (r.reason === "low-pool")
-                UI.toast("Build pool by trading profitably first");
+            if (r.reason === "not-full")
+                UI.toast("Pool not full · trade more to fill it");
         }
     }
 

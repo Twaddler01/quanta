@@ -563,3 +563,12 @@ body {
 .pill.income .v {
     color: var(--quanta);
 }
+
+/* Cash out button — pulsing when pool is full and ready */
+.cashout-btn.can {
+    animation: cashoutReady 2s ease-in-out infinite;
+}
+@keyframes cashoutReady {
+    0%, 100% { box-shadow: 0 0 18px rgba(255, 209, 102, 0.2); }
+    50%      { box-shadow: 0 0 26px rgba(255, 209, 102, 0.45); }
+}

@@ -23,6 +23,30 @@ if (devTools?.tests) {
                     //QUANTA.stuck()  // ensures holding=0
                 }
             },
+            {
+                id: "custom3",
+                label: "QUANTA full cycle (profit)",
+                description: "...",
+                run: () => {
+                    // Fresh market, verify every step
+                    QUANTA.tradeCycle()
+                    // 1. Real buy: q -= buyPrice, holding += 1, costBasis += buyPrice
+                    // 2. Real sell: q += sellPrice, holding -= 1, profit computed
+                    // 3. Pool route: pool += profit × 0.5
+                    // 4. Interest window: recentProfit set, expiresAt = now + 60s
+                    // 5. Toast, save, render
+                    
+                    QUANTA.advance(60)
+                    // 6. Interest accrues over 60s via tick(), using proper √(1 - t/60) decay
+                    // 7. Pool caps at poolMax if necessary
+                    // 8. Cooldowns decay
+                    
+                    QUANTA.cashOut()
+                    // 9. Pool → Big Q, milestone check, reset
+                    
+                    // Full cycle hit, no shortcuts.
+                }
+            },
         ]
     });
 

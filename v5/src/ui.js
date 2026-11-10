@@ -483,15 +483,16 @@ export const UI = (() => {
         /* pool + interest */
         const cap = Market.poolMax(id);
         const poolPct = cap > 0 ? (mk.pool / cap) * 100 : 0;
-        $("#poolRow").textContent =
-            Format.num(mk.pool) +
-            " / " +
-            Format.num(cap) +
-            " q · " +
-            poolPct.toFixed(0) +
-            "%";
+        const fullPct = Config.CASHOUT_FULL_THRESHOLD * 100;
+        let poolLabel = Format.num(mk.pool) + " / " + Format.num(cap) + " q · " + poolPct.toFixed(0) + "%";
+        if (poolPct >= 99.5) poolLabel += " · FULL";
+        else if (poolPct >= fullPct) poolLabel += " · READY";
+        $("#poolRow").textContent = poolLabel;
         $("#poolRow").style.color =
-            poolPct >= 99 ? "var(--cost)" : poolPct > 50 ? "var(--good)" : "";
+            poolPct >= 99.5 ? "var(--cost)"
+            : poolPct >= fullPct ? "var(--good)"
+            : poolPct >= 50 ? "var(--txt)"
+            : "";
 
         const rate = Market.currentInterestRate(id);
         $("#interestRow").textContent =
@@ -557,26 +558,21 @@ export const UI = (() => {
         $("#sellAll").classList.toggle("can", canSell);
         $("#sellAll").classList.toggle("poor", !canSell);
 
-        /* cash out */
+        /* cash out — gated on pool being full */
         const cCheck = Market.canCashOut(id);
         const coBtn = $("#cashOutBtn");
         const coAmt = $("#cashOutAmount");
         if (cCheck.ok) {
             const val = Market.cashOutValue(id);
-            coAmt.textContent = "+" + Format.num(val) + " Q";
+            coAmt.textContent = "+" + Format.num(val) + " Q · FULL";
             coBtn.classList.add("can");
             coBtn.classList.remove("poor");
         } else {
             coBtn.classList.remove("can");
             coBtn.classList.add("poor");
-            if (cCheck.reason === "low-pool") {
-                coAmt.textContent =
-                    "BUILD POOL (" +
-                    Format.num(cCheck.current) +
-                    "/" +
-                    Format.num(cCheck.min) +
-                    ")";
-            }
+            const pct = Math.min(100, Math.round(cCheck.pct));
+            const need = Math.round(Config.CASHOUT_FULL_THRESHOLD * 100);
+            coAmt.textContent = "POOL " + pct + "% · NEED " + need + "%";
         }
 
         /* cash out meta + milestone */

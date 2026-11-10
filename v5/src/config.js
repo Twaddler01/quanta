@@ -60,7 +60,7 @@ export const Config = {
     POOL_ROUTE: 0.5, // 50% of each profitable trade's profit routed to pool
     INTEREST_COEF: 0.02, // interest rate per second at fresh trade
     INTEREST_WINDOW_SEC: 60, // window before interest hits 0
-    CASHOUT_MIN_POOL: 10, // minimum pool value to enable cash out
+    CASHOUT_FULL_THRESHOLD: 1, // pool must be ≥ this % of poolMax to cash out
 
     /* ---- Milestones (unchanged from v4) ---- */
     MILESTONE_EVERY: 10,
