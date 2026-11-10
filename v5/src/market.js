@@ -24,30 +24,38 @@ export const Market = (() => {
         const w = waveOf(id);
         const base = marketBasePrice(id);
         const phase = State.get().noisePhase;
+    
+        /* period multiplier only affects the weather terms */
+        const tp = t * Config.WAVE_PERIOD_MULT;
         const weather =
-            Math.sin((t / w.period1) * Math.PI * 2) * w.amp1 +
-            Math.sin((t / w.period2) * Math.PI * 2 + 0.7) * w.amp2;
+            Math.sin((tp / w.period1) * Math.PI * 2) * w.amp1 +
+            Math.sin((tp / w.period2) * Math.PI * 2 + 0.7) * w.amp2;
+    
+        /* noise multiplier is independent — usually left at 1.0 */
+        const tn = t * Config.WAVE_NOISE_MULT;
         const noise =
-            Math.sin(t * 3.7 + phase) * w.noiseAmp * 0.6 +
-            Math.sin(t * 8.3 + phase * 1.7) * w.noiseAmp * 0.4;
+            Math.sin(tn * 3.7 + phase) * w.noiseAmp * 0.6 +
+            Math.sin(tn * 8.3 + phase * 1.7) * w.noiseAmp * 0.4;
+    
         return Math.max(base * 0.1, base * (1 + weather + noise));
     }
 
     function movingAverage(id, t) {
-        const N = 60,
-            SPAN = 300;
+        const N = 60, SPAN = 300;
         const w = waveOf(id);
         const base = marketBasePrice(id);
         const phase = State.get().noisePhase;
         let sum = 0;
         for (let i = 0; i < N; i++) {
             const tt = t - SPAN + (i / N) * SPAN;
+            const tp = tt * Config.WAVE_PERIOD_MULT;
             const weather =
-                Math.sin((tt / w.period1) * Math.PI * 2) * w.amp1 +
-                Math.sin((tt / w.period2) * Math.PI * 2 + 0.7) * w.amp2;
+                Math.sin((tp / w.period1) * Math.PI * 2) * w.amp1 +
+                Math.sin((tp / w.period2) * Math.PI * 2 + 0.7) * w.amp2;
+            const tn = tt * Config.WAVE_NOISE_MULT;
             const noise =
-                Math.sin(tt * 3.7 + phase) * w.noiseAmp * 0.6 +
-                Math.sin(tt * 8.3 + phase * 1.7) * w.noiseAmp * 0.4;
+                Math.sin(tn * 3.7 + phase) * w.noiseAmp * 0.6 +
+                Math.sin(tn * 8.3 + phase * 1.7) * w.noiseAmp * 0.4;
             sum += base * (1 + weather + noise);
         }
         return sum / N;

@@ -3,6 +3,8 @@ export const Config = {
 
     BASE_PRICE: 100,
     TRADING_FEE: 0.1,
+    WAVE_PERIOD_MULT: 1.5, // peaks/valleys come this much quicker (period ÷ MULT). Try 1.0–2.0.
+    WAVE_NOISE_MULT: 1.0, // noise frequency. Keep at 1.0 for smooth curves; raise if too tame.
 
     STARTING_Q_PER_MARKET: 100,
     STARTING_SHARES: 5,
