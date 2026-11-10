@@ -55,6 +55,7 @@ export const Game = (() => {
         } else {
             if (r.reason === "not-full")
                 UI.toast("Pool not full · trade more to fill it");
+            else if (r.reason === "cooldown") UI.toast("Cash out on cooldown");
         }
     }
 
@@ -81,6 +82,16 @@ export const Game = (() => {
             Save.write();
             UI.render();
         }
+    }
+
+    /* NEW: selectMarket — validates lock, marks seen, sets active */
+    function selectMarket(id) {
+        if (!Market.isUnlocked(id)) return;
+        const s = State.get();
+        s.activeMarket = id;
+        s.seenMarkets[id] = true;
+        Save.write();
+        UI.render();
     }
 
     function reset() {
@@ -134,6 +145,7 @@ export const Game = (() => {
             upgradePortfolio,
             upgradeInterestBooster,
             resetMarket,
+            selectMarket,
             reset
         });
         wireInputs();

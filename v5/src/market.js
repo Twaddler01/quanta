@@ -1,7 +1,16 @@
 import { Config, State } from "./config.js";
 
+const DEFAULT_WAVE = {
+    amp1: 0.3,
+    period1: 75,
+    amp2: 0.12,
+    period2: 23,
+    noiseAmp: 0.05
+};
+
 export const Market = (() => {
     const def = id => Config.MARKETS.find(m => m.id === id);
+    const waveOf = id => def(id)?.wave || DEFAULT_WAVE;
 
     function basePrice() {
         return Config.BASE_PRICE;
@@ -12,43 +21,33 @@ export const Market = (() => {
     }
 
     function naturalPrice(id, t) {
-        const m = def(id);
+        const w = waveOf(id);
         const base = marketBasePrice(id);
         const phase = State.get().noisePhase;
-        const vol = m.volatility;
         const weather =
-            Math.sin((t / Config.WEATHER_PERIOD_1) * Math.PI * 2) *
-                Config.WEATHER_AMP_1 *
-                vol +
-            Math.sin((t / Config.WEATHER_PERIOD_2) * Math.PI * 2 + 0.7) *
-                Config.WEATHER_AMP_2 *
-                vol;
+            Math.sin((t / w.period1) * Math.PI * 2) * w.amp1 +
+            Math.sin((t / w.period2) * Math.PI * 2 + 0.7) * w.amp2;
         const noise =
-            Math.sin(t * 3.7 + phase) * Config.NOISE_AMP * 0.6 * vol +
-            Math.sin(t * 8.3 + phase * 1.7) * Config.NOISE_AMP * 0.4 * vol;
+            Math.sin(t * 3.7 + phase) * w.noiseAmp * 0.6 +
+            Math.sin(t * 8.3 + phase * 1.7) * w.noiseAmp * 0.4;
         return Math.max(base * 0.1, base * (1 + weather + noise));
     }
 
     function movingAverage(id, t) {
         const N = 60,
             SPAN = 300;
-        const m = def(id);
+        const w = waveOf(id);
         const base = marketBasePrice(id);
         const phase = State.get().noisePhase;
-        const vol = m.volatility;
         let sum = 0;
         for (let i = 0; i < N; i++) {
             const tt = t - SPAN + (i / N) * SPAN;
             const weather =
-                Math.sin((tt / Config.WEATHER_PERIOD_1) * Math.PI * 2) *
-                    Config.WEATHER_AMP_1 *
-                    vol +
-                Math.sin((tt / Config.WEATHER_PERIOD_2) * Math.PI * 2 + 0.7) *
-                    Config.WEATHER_AMP_2 *
-                    vol;
+                Math.sin((tt / w.period1) * Math.PI * 2) * w.amp1 +
+                Math.sin((tt / w.period2) * Math.PI * 2 + 0.7) * w.amp2;
             const noise =
-                Math.sin(tt * 3.7 + phase) * Config.NOISE_AMP * 0.6 * vol +
-                Math.sin(tt * 8.3 + phase * 1.7) * Config.NOISE_AMP * 0.4 * vol;
+                Math.sin(tt * 3.7 + phase) * w.noiseAmp * 0.6 +
+                Math.sin(tt * 8.3 + phase * 1.7) * w.noiseAmp * 0.4;
             sum += base * (1 + weather + noise);
         }
         return sum / N;
@@ -176,10 +175,8 @@ export const Market = (() => {
 
         if (profit > 0) {
             mk.lifetimeProfit += profit;
-            /* Route a fraction to pool */
             const route = profit * Config.POOL_ROUTE;
             mk.pool = Math.min(poolMax(id), mk.pool + route);
-            /* Set/extend interest */
             mk.recentProfit = profit;
             mk.interestExpiresAt =
                 Date.now() + Config.INTEREST_WINDOW_SEC * 1000;
@@ -200,7 +197,7 @@ export const Market = (() => {
 
     function canCashOut(id) {
         const mk = State.get().markets[id];
-    
+
         if (mk.cashOutCooldown > 0) {
             const cap0 = poolMax(id);
             return {
@@ -210,7 +207,7 @@ export const Market = (() => {
                 pct: cap0 > 0 ? (mk.pool / cap0) * 100 : 0
             };
         }
-    
+
         const cap = poolMax(id);
         const threshold = cap * Config.CASHOUT_FULL_THRESHOLD;
         if (mk.pool < threshold) {
@@ -252,7 +249,7 @@ export const Market = (() => {
         mk.lifetimeCashOut += value;
         mk.cashOutCount += 1;
 
-        /* ---- Reset pool + interest window after cash out ---- */
+        /* Reset pool + interest window after cash out */
         mk.pool = 0;
         mk.recentProfit = 0;
         mk.interestExpiresAt = 0;
@@ -270,8 +267,6 @@ export const Market = (() => {
             milestoneHit = true;
         }
 
-        /* Track growth % — how much Q grew relative to before this cash out.
-   Skip if qBefore is too small (first cash out from 0 Q). */
         if (qBefore > 1) {
             s.lastGrowthPct = ((value + milestoneBonusQ) / qBefore) * 100;
         }
@@ -366,7 +361,6 @@ export const Market = (() => {
                 mk.cashOutCooldown = Math.max(0, mk.cashOutCooldown - dt);
             if (mk.resetCooldown > 0)
                 mk.resetCooldown = Math.max(0, mk.resetCooldown - dt);
-            /* Interest accrual */
             if (mk.interestExpiresAt > now && mk.recentProfit > 0) {
                 const timeLeftFrac =
                     (mk.interestExpiresAt - now) /

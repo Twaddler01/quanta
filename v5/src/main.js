@@ -243,9 +243,35 @@ window.QUANTA = {
     wipe: () => {
         Save.wipe();
         location.reload();
+    },
+    unlockAll: () => {
+        const s = State.get();
+        const maxUnlock = Config.MARKETS.reduce(
+            (max, m) => Math.max(max, m.unlockAt),
+            0
+        );
+        s.total = Math.max(s.total, maxUnlock);
+        UI.render();
+        return "Markets unlocked. total = " + Format.num(s.total);
+    },
+    markSeen: id => {
+        const mid = id || State.get().activeMarket;
+        State.get().seenMarkets[mid] = true;
+        UI.render();
+        return "Marked " + mid + " as seen";
+    },
+    resetSeen: () => {
+        const s = State.get();
+        s.seenMarkets = {
+            calm: true,
+            tidal: false,
+            vortex: false,
+            chaos: false
+        };
+        UI.render();
+        return "Seen marks reset (calm still seen)";
     }
 };
-
 
 /*
 // Fresh market, verify every step

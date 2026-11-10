@@ -687,3 +687,43 @@ body {
     color: var(--good);
     text-shadow: 0 0 10px rgba(74, 222, 128, 0.5);
 }
+
+/* ============================================================
+   v5.3 — Locked & unread market chips
+   ============================================================ */
+
+.market-chip.locked {
+    opacity: 0.55;
+    cursor: not-allowed;
+    pointer-events: none;
+    background: linear-gradient(180deg, #0f1626, #0a0f1a);
+    border-color: rgba(29, 41, 66, 0.7);
+}
+.market-chip.locked b {
+    color: var(--dim);
+    font-weight: 600;
+}
+.market-chip.locked small {
+    color: var(--dim2);
+}
+
+.market-chip.unread {
+    border-color: rgba(255, 209, 102, 0.6);
+    animation: chipUnreadPulse 2s ease-in-out infinite;
+}
+.market-chip.unread b {
+    color: var(--cost);
+}
+.market-chip.unread small {
+    color: var(--cost);
+    font-weight: 600;
+}
+.market-chip.unread.active {
+    /* Unread + active — still active colors but with the pulse */
+    border-color: rgba(255, 209, 102, 0.6);
+}
+
+@keyframes chipUnreadPulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(255, 209, 102, 0.15); }
+    50%      { box-shadow: 0 0 20px rgba(255, 209, 102, 0.42); }
+}

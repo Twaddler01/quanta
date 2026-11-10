@@ -34,19 +34,20 @@ export const UI = (() => {
             id: "marketChips"
         });
         for (const m of Config.MARKETS) {
+            const nameEl = el("b", {}, m.name);
+            const subEl = el("small", {}, "—");
             const btn = el(
                 "button",
                 {
                     className: "market-chip",
                     onClick: () => {
-                        State.get().activeMarket = m.id;
-                        render();
+                        actions.selectMarket(m.id);
                     }
                 },
-                [el("b", {}, m.name), el("small", { id: "chip-" + m.id }, "—")]
+                [nameEl, subEl]
             );
             chips.appendChild(btn);
-            marketChipEls[m.id] = btn;
+            marketChipEls[m.id] = { btn, nameEl, subEl };
         }
 
         canvas = el("canvas", { id: "chart" });
@@ -103,7 +104,7 @@ export const UI = (() => {
             "—"
         );
 
-        /* ---- Cash out with progress fill ---- */
+        /* ---- Cash out ---- */
         const cashOutFill = el("div", {
             className: "co-fill",
             id: "cashOutFill"
@@ -289,6 +290,7 @@ export const UI = (() => {
         upgradePortfolio: () => {},
         upgradeInterestBooster: () => {},
         resetMarket: () => {},
+        selectMarket: () => {},
         reset: () => {}
     };
     function setActions(a) {
@@ -468,17 +470,25 @@ export const UI = (() => {
         $("#marketsPill").textContent =
             unlockedCount + "/" + Config.MARKETS.length;
 
-        /* ============ Market chips ============ */
+        /* ============ Market chips: locked / unread / active ============ */
         for (const m of Config.MARKETS) {
             const unlocked = Market.isUnlocked(m.id);
-            const chip = marketChipEls[m.id];
-            chip.classList.toggle("active", m.id === id);
-            chip.classList.toggle("locked", !unlocked);
-            const sub = $("#chip-" + m.id);
-            if (unlocked) {
+            const seen = s.seenMarkets[m.id] !== false;
+            const ref = marketChipEls[m.id];
+
+            ref.btn.classList.toggle("active", m.id === id);
+            ref.btn.classList.toggle("locked", !unlocked);
+            ref.btn.classList.toggle("unread", unlocked && !seen);
+
+            if (!unlocked) {
+                ref.nameEl.textContent = "🔒 " + m.name;
+                ref.subEl.textContent =
+                    "unlock " + Format.num(m.unlockAt) + " Q";
+            } else {
+                ref.nameEl.textContent = m.name;
                 const mk2 = s.markets[m.id];
                 const cap2 = Market.poolMax(m.id);
-                sub.textContent =
+                const stats =
                     "×" +
                     Format.plain(Market.marketMultiplier(m.id)) +
                     " · " +
@@ -486,8 +496,7 @@ export const UI = (() => {
                     "/" +
                     Format.num(cap2) +
                     "q";
-            } else {
-                sub.textContent = "unlock " + Format.num(m.unlockAt) + " Q";
+                ref.subEl.textContent = seen ? stats : "NEW — tap to view";
             }
         }
 
@@ -641,7 +650,7 @@ export const UI = (() => {
         $("#sellAll").classList.toggle("can", canSell);
         $("#sellAll").classList.toggle("poor", !canSell);
 
-        /* ============ Cash out progress bar ============ */
+        /* ============ Cash out ============ */
         const cCheck = Market.canCashOut(id);
         const coBtn = $("#cashOutBtn");
         const coFill = $("#cashOutFill");
