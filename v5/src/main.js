@@ -217,6 +217,24 @@ window.QUANTA = {
             interestExpiredAt: mk.interestExpiresAt
         };
     },
+    waveMults: () => {
+        const out = {};
+        for (const m of Config.MARKETS) {
+            const w = m.wave || {};
+            const pm = w.periodMult ?? Config.WAVE_PERIOD_MULT;
+            const nm = w.noiseMult ?? Config.WAVE_NOISE_MULT;
+            out[m.id] = {
+                periodMult: pm,
+                noiseMult: nm,
+                source: w.periodMult != null ? "market" : "global",
+                baseCycleSec: w.period1,
+                effectiveCycleSec: w.period1 / pm,
+                subCycleSec: w.period2,
+                effectiveSubSec: w.period2 / pm
+            };
+        }
+        return out;
+    },
     fillPool: id => {
         const mid = id || State.get().activeMarket;
         State.get().markets[mid].pool = Market.poolMax(mid);

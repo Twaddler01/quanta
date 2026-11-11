@@ -719,6 +719,8 @@ export const UI = (() => {
 
         /* ============ Share upgrade ============ */
         const upCost = Market.shareUpgradeCost(id);
+        const upRequired = Market.shareUpgradeRequirement(id);
+        const canUpgrade = mk.q >= upRequired;
         const newCap = mk.shares + 1;
         const shareBonusPct = Math.round(
             (1 + newCap * Config.SHARE_POOL_BONUS) * 100 - 100
@@ -730,9 +732,15 @@ export const UI = (() => {
             " shares · +" +
             shareBonusPct +
             "% pool cap";
-        $("#upgShareCost").textContent = Format.num(upCost) + " q";
-        $("#upgradeShareBtn").classList.toggle("can", mk.q >= upCost);
-        $("#upgradeShareBtn").classList.toggle("poor", mk.q < upCost);
+        $("#upgShareCost").textContent =
+            Format.num(upRequired) +
+            " q (" +
+            Format.num(upCost) +
+            " + " +
+            Format.num(Config.STARTING_Q_PER_MARKET) +
+            " reserve)";
+        $("#upgradeShareBtn").classList.toggle("can", canUpgrade);
+        $("#upgradeShareBtn").classList.toggle("poor", !canUpgrade);
 
         /* ============ Portfolio rows ============ */
         const rows = [];

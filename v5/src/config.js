@@ -3,13 +3,22 @@ export const Config = {
 
     BASE_PRICE: 100,
     TRADING_FEE: 0.1,
-    WAVE_PERIOD_MULT: 1.5, // peaks/valleys come this much quicker (period ÷ MULT). Try 1.0–2.0.
-    WAVE_NOISE_MULT: 1.0, // noise frequency. Keep at 1.0 for smooth curves; raise if too tame.
+    /* Global defaults. Each market can override with wave.periodMult / wave.noiseMult. */
+    WAVE_PERIOD_MULT: 1.5, // peaks/valleys come this much quicker (period ÷ MULT)
+    WAVE_NOISE_MULT: 1.0, // noise frequency (1.0 = smooth)
 
-    STARTING_Q_PER_MARKET: 100,
+    STARTING_Q_PER_MARKET: 200,
     STARTING_SHARES: 5,
     SHARE_UPGRADE_BASE: 100,
-    SHARE_UPGRADE_MULT: 1.8,
+    SHARE_UPGRADE_MULT: 1.2,
+
+/*
+Market  Base  period1 periodMult Effective cycle Feel
+Calm    40s   1.8     ~22s        fast, forgiving
+Tidal   75s   1.3     ~58s        mid
+Vortex 110s   1.1     ~100s       deliberate
+Chaos  150s   0.8     ~188s       slow, dramatic
+*/
 
     MARKETS: [
         {
@@ -20,11 +29,10 @@ export const Config = {
             threshold: 1000,
             unlockAt: 0,
             wave: {
-                amp1: 0.2,
-                period1: 40,
-                amp2: 0.08,
-                period2: 12,
-                noiseAmp: 0.02
+                amp1: 0.20, period1: 40,
+                amp2: 0.08, period2: 20,
+                noiseAmp: 0.02,
+                periodMult: 3   // fastest
             }
         },
         {
@@ -35,11 +43,10 @@ export const Config = {
             threshold: 2000,
             unlockAt: 5000,
             wave: {
-                amp1: 0.3,
-                period1: 75,
-                amp2: 0.12,
-                period2: 23,
-                noiseAmp: 0.05
+                amp1: 0.30, period1: 70,
+                amp2: 0.05, period2: 17,
+                noiseAmp: 0.05,
+                periodMult: 2.8
             }
         },
         {
@@ -50,11 +57,10 @@ export const Config = {
             threshold: 4000,
             unlockAt: 50000,
             wave: {
-                amp1: 0.35,
-                period1: 110,
-                amp2: 0.25,
-                period2: 15,
-                noiseAmp: 0.12
+                amp1: 0.35, period1: 110,
+                amp2: 0.25, period2: 15,
+                noiseAmp: 0.12,
+                periodMult: 1.8
             }
         },
         {
@@ -65,11 +71,10 @@ export const Config = {
             threshold: 8000,
             unlockAt: 500000,
             wave: {
-                amp1: 0.4,
-                period1: 150,
-                amp2: 0.3,
-                period2: 9,
-                noiseAmp: 0.2
+                amp1: 0.40, period1: 150,
+                amp2: 0.30, period2: 9,
+                noiseAmp: 0.20,
+                periodMult: 0.8   // peak every ~188s — deliberate, drawn out
             }
         }
     ],
@@ -87,7 +92,6 @@ export const Config = {
     MILESTONE_PERM_BONUS: 0.02,
     MILESTONE_PERM_CAP: 0.5,
 
-    RESET_BASE_Q: 100,
     RESET_COOLDOWN: 60,
     RESET_THRESHOLD_Q: 50,
 

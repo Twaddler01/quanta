@@ -12,6 +12,15 @@ export const Market = (() => {
     const def = id => Config.MARKETS.find(m => m.id === id);
     const waveOf = id => def(id)?.wave || DEFAULT_WAVE;
 
+    function periodMultOf(id) {
+        const override = def(id)?.wave?.periodMult;
+        return Math.max(0.1, override ?? Config.WAVE_PERIOD_MULT);
+    }
+    function noiseMultOf(id) {
+        const override = def(id)?.wave?.noiseMult;
+        return Math.max(0.1, override ?? Config.WAVE_NOISE_MULT);
+    }
+
     function basePrice() {
         return Config.BASE_PRICE;
     }
@@ -24,35 +33,36 @@ export const Market = (() => {
         const w = waveOf(id);
         const base = marketBasePrice(id);
         const phase = State.get().noisePhase;
-    
-        /* period multiplier only affects the weather terms */
-        const tp = t * Config.WAVE_PERIOD_MULT;
+
+        const tp = t * periodMultOf(id);
         const weather =
             Math.sin((tp / w.period1) * Math.PI * 2) * w.amp1 +
             Math.sin((tp / w.period2) * Math.PI * 2 + 0.7) * w.amp2;
-    
-        /* noise multiplier is independent — usually left at 1.0 */
-        const tn = t * Config.WAVE_NOISE_MULT;
+
+        const tn = t * noiseMultOf(id);
         const noise =
             Math.sin(tn * 3.7 + phase) * w.noiseAmp * 0.6 +
             Math.sin(tn * 8.3 + phase * 1.7) * w.noiseAmp * 0.4;
-    
+
         return Math.max(base * 0.1, base * (1 + weather + noise));
     }
 
     function movingAverage(id, t) {
-        const N = 60, SPAN = 300;
+        const N = 60,
+            SPAN = 300;
         const w = waveOf(id);
         const base = marketBasePrice(id);
         const phase = State.get().noisePhase;
+        const pm = periodMultOf(id);
+        const nm = noiseMultOf(id);
         let sum = 0;
         for (let i = 0; i < N; i++) {
             const tt = t - SPAN + (i / N) * SPAN;
-            const tp = tt * Config.WAVE_PERIOD_MULT;
+            const tp = tt * pm;
             const weather =
                 Math.sin((tp / w.period1) * Math.PI * 2) * w.amp1 +
                 Math.sin((tp / w.period2) * Math.PI * 2 + 0.7) * w.amp2;
-            const tn = tt * Config.WAVE_NOISE_MULT;
+            const tn = tt * nm;
             const noise =
                 Math.sin(tn * 3.7 + phase) * w.noiseAmp * 0.6 +
                 Math.sin(tn * 8.3 + phase * 1.7) * w.noiseAmp * 0.4;
@@ -136,12 +146,17 @@ export const Market = (() => {
         );
     }
 
+    function shareUpgradeRequirement(id) {
+        return shareUpgradeCost(id) + Config.STARTING_Q_PER_MARKET;
+    }
+    
     function upgradeShares(id) {
         const s = State.get();
         const mk = s.markets[id];
         const cost = shareUpgradeCost(id);
-        if (mk.q < cost) return false;
-        mk.q -= cost;
+        const required = cost + Config.STARTING_Q_PER_MARKET;
+        if (mk.q < required) return false;
+        mk.q -= cost;                     // reserve stays in wallet
         mk.shares += 1;
         return true;
     }
@@ -292,7 +307,7 @@ export const Market = (() => {
     /* ---- market reset ---- */
 
     function resetAmount() {
-        return Config.RESET_BASE_Q;
+        return Config.STARTING_Q_PER_MARKET;
     }
 
     function canReset(id) {
@@ -393,6 +408,8 @@ export const Market = (() => {
         marketBasePrice,
         naturalPrice,
         movingAverage,
+        periodMultOf,
+        noiseMultOf,
         buyPrice,
         sellPrice,
         marketMultiplier,
@@ -404,6 +421,7 @@ export const Market = (() => {
         totalInterestRate,
         isUnlocked,
         shareUpgradeCost,
+        shareUpgradeRequirement,
         upgradeShares,
         buyUnits,
         sellUnits,
