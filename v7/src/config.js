@@ -1,5 +1,5 @@
 export const Config = (() => {
-    const DEBUG_MODE = true; // set false to strip debug market entirely
+    const DEBUG_MODE = false; // set false to strip debug market entirely
 
     const BASE_MARKETS = [
         {
