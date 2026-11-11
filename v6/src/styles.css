@@ -1,0 +1,891 @@
+:root {
+    --bg: #070a14;
+    --panel: #101728;
+    --line: #1d2942;
+    --txt: #e2e9fb;
+    --dim: #7f8db3;
+    --dim2: #5f6d92;
+    --quanta: #3fe9ff;
+    --good: #4dffa6;
+    --cost: #ffd166;
+    --surge: #ff3ea5;
+    --entropy: #f97316;
+    --market: #4ade80;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+* {
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+html,
+body {
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    min-height: 100vh;
+    min-height: 100dvh;
+    color: var(--txt);
+    font-family:
+        ui-sans-serif,
+        system-ui,
+        -apple-system,
+        sans-serif;
+    background:
+        radial-gradient(1200px 620px at 50% -12%, #16224a 0%, transparent 62%),
+        radial-gradient(800px 520px at 105% 112%, #2a0b32 0%, transparent 60%),
+        var(--bg);
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+#hud {
+    padding: 14px 16px;
+    text-align: center;
+    border-bottom: 1px solid var(--line);
+    background: linear-gradient(
+        180deg,
+        rgba(10, 15, 30, 0.9),
+        rgba(10, 15, 30, 0.4)
+    );
+}
+.qval {
+    font-family: var(--mono);
+    font-size: clamp(28px, 10vw, 44px);
+    font-weight: 700;
+    line-height: 1.05;
+    color: #fff;
+    text-shadow: 0 0 22px rgba(63, 233, 255, 0.5);
+}
+.qlabel {
+    margin-top: 2px;
+    font-size: 9.5px;
+    letter-spacing: 0.34em;
+    color: var(--dim);
+}
+.hud-sub {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 12px;
+}
+.pill {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    padding: 4px 11px;
+    border-radius: 999px;
+    font-size: 11px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--line);
+}
+.pill .k {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--dim);
+}
+.pill .v {
+    font-family: var(--mono);
+    font-weight: 600;
+    color: var(--txt);
+}
+.pill.entropy {
+    background: rgba(249, 115, 22, 0.08);
+    border-color: rgba(249, 115, 22, 0.28);
+}
+.pill.entropy .v {
+    color: var(--entropy);
+}
+.pill.income {
+    background: rgba(63, 233, 255, 0.07);
+    border-color: rgba(63, 233, 255, 0.22);
+}
+.pill.income .v {
+    color: var(--quanta);
+}
+.pill.shares {
+    background: rgba(74, 222, 128, 0.07);
+    border-color: rgba(74, 222, 128, 0.28);
+}
+.pill.shares .v {
+    color: var(--market);
+}
+
+#main {
+    padding: 14px 12px 40px;
+    max-width: 640px;
+    margin: 0 auto;
+}
+
+.panel {
+    margin-bottom: 14px;
+    padding: 13px;
+    border-radius: 14px;
+    background: linear-gradient(
+        180deg,
+        rgba(17, 26, 46, 0.9),
+        rgba(11, 18, 32, 0.9)
+    );
+    border: 1px solid var(--line);
+}
+.panel-title {
+    font-size: 9.5px;
+    letter-spacing: 0.22em;
+    color: var(--dim);
+    margin-bottom: 10px;
+    text-transform: uppercase;
+}
+
+.chips-panel {
+    padding: 8px;
+    overflow: hidden;
+}
+.market-chips {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.market-chips::-webkit-scrollbar {
+    display: none;
+}
+
+.market-chip {
+    flex: 0 0 auto;
+    min-width: 130px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: linear-gradient(180deg, #142033, #0b1220);
+    color: var(--dim);
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.market-chip b {
+    display: block;
+    font-size: 12px;
+    color: var(--txt);
+    font-weight: 700;
+    margin-bottom: 2px;
+}
+.market-chip small {
+    display: block;
+    font-size: 9px;
+    color: var(--dim2);
+    font-family: var(--mono);
+}
+.market-chip.active {
+    border-color: rgba(74, 222, 128, 0.65);
+    background: linear-gradient(
+        180deg,
+        rgba(74, 222, 128, 0.12),
+        rgba(74, 222, 128, 0.02)
+    );
+}
+.market-chip.active b {
+    color: var(--market);
+}
+.market-chip.active small {
+    color: var(--good);
+}
+.market-chip.locked {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.market-name {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--dim);
+    margin-top: -6px;
+    margin-bottom: 10px;
+}
+
+.chart-wrap {
+    position: relative;
+    margin-bottom: 10px;
+}
+#chart {
+    display: block;
+    width: 100%;
+    height: 140px;
+    border-radius: 10px;
+    background:
+        radial-gradient(
+            120% 140% at 50% 130%,
+            rgba(74, 222, 128, 0.1),
+            transparent 70%
+        ),
+        #070c18;
+    border: 1px solid var(--line);
+}
+
+.stat-block {
+    margin-bottom: 12px;
+}
+.row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 5px 0;
+    font-size: 12px;
+    color: var(--dim);
+    border-bottom: 1px dashed rgba(29, 41, 66, 0.6);
+}
+.row:last-child {
+    border-bottom: 0;
+}
+.row .value {
+    font-family: var(--mono);
+    color: var(--txt);
+    font-weight: 600;
+}
+
+.trade-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+.trade-btn {
+    padding: 12px 10px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: linear-gradient(180deg, #142033, #0b1220);
+    color: var(--txt);
+    font-family: inherit;
+    cursor: pointer;
+    text-align: center;
+    transition:
+        transform 0.07s,
+        border-color 0.15s;
+    touch-action: manipulation;
+}
+.trade-btn:active {
+    transform: scale(0.98);
+}
+.trade-btn .btn-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+}
+.trade-btn .btn-amount {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--dim);
+    margin-top: 2px;
+}
+.trade-btn.buy {
+    border-color: rgba(74, 222, 128, 0.35);
+}
+.trade-btn.buy.can {
+    border-color: rgba(74, 222, 128, 0.85);
+    box-shadow: 0 0 14px rgba(74, 222, 128, 0.15);
+}
+.trade-btn.buy.can .btn-amount {
+    color: var(--market);
+}
+.trade-btn.sell {
+    border-color: rgba(255, 209, 102, 0.35);
+}
+.trade-btn.sell.can {
+    border-color: rgba(255, 209, 102, 0.85);
+    box-shadow: 0 0 14px rgba(255, 209, 102, 0.15);
+}
+.trade-btn.sell.can .btn-amount {
+    color: var(--cost);
+}
+.trade-btn.poor {
+    opacity: 0.4;
+}
+
+.upgrade-btn {
+    width: 100%;
+    padding: 12px 14px;
+    margin-top: 10px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: linear-gradient(180deg, #142033, #0b1220);
+    color: var(--txt);
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.upgrade-btn.can {
+    border-color: rgba(74, 222, 128, 0.7);
+    box-shadow: 0 0 14px rgba(74, 222, 128, 0.15);
+}
+.upgrade-btn.poor {
+    opacity: 0.5;
+}
+.upg-title {
+    font-size: 13px;
+    font-weight: 700;
+}
+.upg-desc {
+    font-size: 11px;
+    color: var(--dim);
+    margin-top: 3px;
+}
+.upg-cost {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--cost);
+    font-weight: 700;
+    margin-top: 6px;
+}
+
+.cashout-btn {
+    width: 100%;
+    padding: 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 209, 102, 0.4);
+    background: linear-gradient(
+        180deg,
+        rgba(255, 209, 102, 0.14),
+        rgba(255, 209, 102, 0.02)
+    );
+    color: #fff;
+    font-family: inherit;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition:
+        border-color 0.15s,
+        box-shadow 0.15s;
+}
+.cashout-btn.can {
+    border-color: rgba(255, 209, 102, 0.85);
+    box-shadow: 0 0 18px rgba(255, 209, 102, 0.2);
+}
+.cashout-btn.poor {
+    opacity: 0.5;
+}
+.co-label {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+}
+.co-amount {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--cost);
+}
+
+.portfolio-rows {
+    margin-bottom: 10px;
+}
+.portfolio-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 7px 0;
+    font-size: 12px;
+    border-bottom: 1px dashed rgba(29, 41, 66, 0.6);
+}
+.portfolio-row:last-child {
+    border-bottom: 0;
+}
+.portfolio-row.locked {
+    opacity: 0.45;
+}
+.pr-name {
+    color: var(--txt);
+    font-weight: 600;
+}
+.pr-info {
+    font-family: var(--mono);
+    color: var(--dim);
+    font-size: 11px;
+}
+
+.ghost {
+    display: block;
+    margin: 24px auto 0;
+    padding: 9px 18px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--dim2);
+    font-family: inherit;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+/* Toast milestone styling — slightly bigger/longer on hit */
+#toast {
+    position: fixed;
+    left: 50%;
+    top: calc(14px + env(safe-area-inset-top));
+    transform: translate(-50%, -18px);
+    max-width: 90vw;
+    padding: 8px 15px;
+    border-radius: 999px;
+    border: 1px solid rgba(63, 233, 255, 0.35);
+    background: rgba(20, 30, 50, 0.97);
+    color: var(--quanta);
+    font-family: var(--mono);
+    font-size: 11.5px;
+    text-align: center;
+    opacity: 0;
+    pointer-events: none;
+    transition:
+        opacity 0.3s,
+        transform 0.3s;
+    z-index: 50;
+}
+#toast.show {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+
+/* Header update: PORTFOLIO label above */
+.qlabel-top {
+    font-size: 9.5px;
+    letter-spacing: 0.34em;
+    color: var(--dim);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+.qval {
+    font-family: var(--mono);
+    font-size: clamp(28px, 10vw, 44px);
+    font-weight: 700;
+    line-height: 1.05;
+    color: #fff;
+    text-shadow: 0 0 22px rgba(63, 233, 255, 0.5);
+}
+.qval-unit {
+    font-size: 0.55em;
+    color: var(--dim);
+    font-weight: 600;
+}
+
+/* Cash out meta row */
+.cashout-meta {
+    margin-top: 6px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--dim);
+    text-align: center;
+}
+
+/* Milestone row */
+.milestone-row {
+    margin-top: 6px;
+    margin-bottom: 4px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    color: var(--cost);
+    text-align: center;
+    line-height: 1.4;
+}
+
+/* Portfolio total line */
+.portfolio-total {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--market);
+    text-align: center;
+    padding: 8px 0;
+    margin: 6px 0;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+}
+
+/* Market reset (emergency recovery) */
+.reset-market-btn {
+    width: 100%;
+    padding: 12px 14px;
+    margin-top: 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(249, 115, 22, 0.6);
+    background: linear-gradient(
+        180deg,
+        rgba(249, 115, 22, 0.18),
+        rgba(249, 115, 22, 0.04)
+    );
+    color: #fff;
+    font-family: inherit;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition:
+        border-color 0.15s,
+        box-shadow 0.15s;
+    animation: resetPulse 2s ease-in-out infinite;
+}
+.reset-market-btn:active {
+    transform: scale(0.985);
+}
+.reset-market-btn:hover {
+    border-color: rgba(249, 115, 22, 0.9);
+}
+.reset-market-btn.hidden {
+    display: none;
+}
+.rm-label {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+}
+.rm-amount {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--entropy);
+}
+@keyframes resetPulse {
+    0%,
+    100% {
+        box-shadow: 0 0 12px rgba(249, 115, 22, 0.15);
+    }
+    50% {
+        box-shadow: 0 0 22px rgba(249, 115, 22, 0.35);
+    }
+}
+
+/* Interest pill — matches income pill color scheme */
+.pill.income {
+    background: rgba(63, 233, 255, 0.07);
+    border-color: rgba(63, 233, 255, 0.22);
+}
+.pill.income .v {
+    color: var(--quanta);
+}
+
+/* Cash out button — pulsing when pool is full and ready */
+.cashout-btn.can {
+    animation: cashoutReady 2s ease-in-out infinite;
+}
+@keyframes cashoutReady {
+    0%,
+    100% {
+        box-shadow: 0 0 18px rgba(255, 209, 102, 0.2);
+    }
+    50% {
+        box-shadow: 0 0 26px rgba(255, 209, 102, 0.45);
+    }
+}
+
+/* ============================================================
+   v5.1 — Market status row + growth/markets pills
+   ============================================================ */
+
+/* Market status row (shares / pool / interest, above chart) */
+.market-status {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 8px;
+    margin-bottom: 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--dim);
+    line-height: 1.4;
+}
+.ms-item {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 3px;
+}
+.ms-k {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    color: var(--dim);
+}
+.ms-v {
+    color: var(--txt);
+    font-weight: 600;
+}
+.ms-sep {
+    color: var(--dim2);
+    font-size: 10px;
+}
+
+/* Growth pill — cyan when positive, pink when negative */
+.pill.income .v {
+    transition: color 0.2s;
+}
+
+/* Markets pill — green like shares pill */
+.pill.shares .v {
+    transition: color 0.2s;
+}
+
+/* ============================================================
+   v5.2 — Cash out progress bar
+   ============================================================ */
+
+.cashout-btn {
+    position: relative;
+    overflow: hidden;
+}
+
+.co-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 0;
+    background: linear-gradient(
+        90deg,
+        rgba(74, 222, 128, 0.18) 0%,
+        rgba(74, 222, 128, 0.3) 100%
+    );
+    transition: width 0.4s ease;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.cashout-btn.poor .co-fill {
+    background: linear-gradient(
+        90deg,
+        rgba(74, 222, 128, 0.1) 0%,
+        rgba(74, 222, 128, 0.22) 100%
+    );
+}
+
+.cashout-btn.can .co-fill,
+.cashout-btn.full .co-fill {
+    background: linear-gradient(
+        90deg,
+        rgba(74, 222, 128, 0.28) 0%,
+        rgba(74, 222, 128, 0.45) 100%
+    );
+}
+
+.cashout-btn .co-label,
+.cashout-btn .co-amount {
+    position: relative;
+    z-index: 1;
+}
+
+.cashout-btn.poor .co-label,
+.cashout-btn.poor .co-amount {
+    color: var(--dim);
+}
+
+.cashout-btn.poor {
+    border-color: rgba(74, 222, 128, 0.28);
+    background: linear-gradient(
+        180deg,
+        rgba(30, 45, 65, 0.5),
+        rgba(11, 18, 32, 0.6)
+    );
+    opacity: 1;
+}
+
+.cashout-btn.can .co-label,
+.cashout-btn.full .co-label {
+    color: #fff;
+    text-shadow: 0 0 8px rgba(74, 222, 128, 0.6);
+}
+
+.cashout-btn.can .co-amount,
+.cashout-btn.full .co-amount {
+    color: var(--good);
+    text-shadow: 0 0 10px rgba(74, 222, 128, 0.5);
+}
+
+/* ============================================================
+   v5.3 — Locked & unread market chips
+   ============================================================ */
+
+.market-chip.locked {
+    opacity: 0.55;
+    cursor: not-allowed;
+    pointer-events: none;
+    background: linear-gradient(180deg, #0f1626, #0a0f1a);
+    border-color: rgba(29, 41, 66, 0.7);
+}
+.market-chip.locked b {
+    color: var(--dim);
+    font-weight: 600;
+}
+.market-chip.locked small {
+    color: var(--dim2);
+}
+
+.market-chip.unread {
+    border-color: rgba(255, 209, 102, 0.6);
+    animation: chipUnreadPulse 2s ease-in-out infinite;
+}
+.market-chip.unread b {
+    color: var(--cost);
+}
+.market-chip.unread small {
+    color: var(--cost);
+    font-weight: 600;
+}
+.market-chip.unread.active {
+    /* Unread + active — still active colors but with the pulse */
+    border-color: rgba(255, 209, 102, 0.6);
+}
+
+@keyframes chipUnreadPulse {
+    0%,
+    100% {
+        box-shadow: 0 0 8px rgba(255, 209, 102, 0.15);
+    }
+    50% {
+        box-shadow: 0 0 20px rgba(255, 209, 102, 0.42);
+    }
+}
+
+/* ============================================================
+   v6 — New portfolio upgrades, IPO system, profile panel
+   ============================================================ */
+
+/* IPO button (in market panel) */
+.ipo-btn {
+    width: 100%;
+    padding: 12px 14px;
+    margin-top: 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 209, 102, 0.6);
+    background: linear-gradient(
+        180deg,
+        rgba(255, 209, 102, 0.15),
+        rgba(255, 209, 102, 0.03)
+    );
+    color: #fff;
+    font-family: inherit;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition:
+        border-color 0.15s,
+        box-shadow 0.15s;
+    animation: ipoPulse 2.4s ease-in-out infinite;
+}
+.ipo-btn.hidden {
+    display: none;
+}
+.ipo-btn:active {
+    transform: scale(0.985);
+}
+.ipo-label {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--cost);
+}
+.ipo-amount {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--cost);
+}
+
+@keyframes ipoPulse {
+    0%,
+    100% {
+        box-shadow: 0 0 12px rgba(255, 209, 102, 0.15);
+    }
+    50% {
+        box-shadow: 0 0 24px rgba(255, 209, 102, 0.4);
+    }
+}
+
+/* IPO'd market view (replaces trading UI) */
+.ipo-view {
+    padding: 20px 0;
+    text-align: center;
+}
+.ipo-view.hidden {
+    display: none;
+}
+.ipo-retired {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.34em;
+    color: var(--cost);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    text-shadow: 0 0 12px rgba(255, 209, 102, 0.5);
+}
+.ipo-passive {
+    display: flex;
+    justify-content: center;
+    align-items: baseline;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+.ipo-passive-k {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--dim);
+}
+.ipo-passive-v {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--good);
+    text-shadow: 0 0 14px rgba(77, 255, 166, 0.6);
+}
+.ipo-lifetime {
+    font-size: 11px;
+    color: var(--dim);
+    font-family: var(--mono);
+}
+
+/* IPO'd market chip */
+.market-chip.ipoed {
+    border-color: rgba(255, 209, 102, 0.55);
+    background: linear-gradient(
+        180deg,
+        rgba(255, 209, 102, 0.08),
+        rgba(255, 209, 102, 0.01)
+    );
+}
+.market-chip.ipoed b {
+    color: var(--cost);
+}
+.market-chip.ipoed small {
+    color: var(--good);
+}
+
+/* IPO'd portfolio row */
+.portfolio-row.ipoed .pr-name {
+    color: var(--cost);
+}
+.portfolio-row.ipoed .pr-info {
+    color: var(--good);
+}
+
+/* Profile panel — subtle background tint */
+#profileEarned,
+#profileLifetimeCO,
+#profileLifetimeProfit,
+#profileBestCO {
+    color: var(--quanta);
+}
+#profileIpoCount,
+#profileIpoPassive {
+    color: var(--cost);
+}
+#profilePlaytime {
+    color: var(--dim);
+}
+
+/* Passive income pill — green accent */
+.pill.good {
+    background: rgba(77, 255, 166, 0.08);
+    border-color: rgba(77, 255, 166, 0.28);
+}
+.pill.good .v {
+    color: var(--good);
+    transition: color 0.2s;
+}
