@@ -39,6 +39,7 @@ export const Config = (() => {
     }
 
     const BASE_MARKETS = [
+        // before
         {
             id: "calm",
             name: "Calm Waters",
@@ -75,6 +76,7 @@ export const Config = (() => {
                 periodMult: 1.0
             }
         },
+        // after
         {
             id: "tidal",
             name: "Turbulent Tides",
@@ -83,11 +85,11 @@ export const Config = (() => {
             threshold: 2000,
             unlockAt: 5000,
             wave: {
-                amp1: 0.3,
-                period1: 70,
-                amp2: 0.05,
-                period2: 17,
-                noiseAmp: 0.05,
+                amp1: 0.28,
+                period1: 60,
+                amp2: 0.1,
+                period2: 18,
+                noiseAmp: 0.04,
                 periodMult: 2.8
             }
         },
