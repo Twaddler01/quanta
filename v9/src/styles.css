@@ -397,15 +397,6 @@ body {
 .portfolio-row.locked {
     opacity: 0.45;
 }
-.pr-name {
-    color: var(--txt);
-    font-weight: 600;
-}
-.pr-info {
-    font-family: var(--mono);
-    color: var(--dim);
-    font-size: 11px;
-}
 
 .ghost {
     display: block;
@@ -465,16 +456,6 @@ body {
     font-size: 10.5px;
     color: var(--dim);
     text-align: center;
-}
-
-.milestone-row {
-    margin-top: 6px;
-    margin-bottom: 4px;
-    font-family: var(--mono);
-    font-size: 10.5px;
-    color: var(--cost);
-    text-align: center;
-    line-height: 1.4;
 }
 
 .portfolio-total {
@@ -613,8 +594,7 @@ body {
     );
 }
 
-.cashout-btn.can .co-fill,
-.cashout-btn.full .co-fill {
+.cashout-btn.can .co-fill {
     background: linear-gradient(
         90deg,
         rgba(74, 222, 128, 0.28) 0%,
@@ -694,131 +674,18 @@ body {
     }
 }
 
-.ipo-btn {
-    width: 100%;
-    padding: 12px 14px;
-    margin-top: 10px;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 209, 102, 0.6);
-    background: linear-gradient(
-        180deg,
-        rgba(255, 209, 102, 0.15),
-        rgba(255, 209, 102, 0.03)
-    );
-    color: #fff;
-    font-family: inherit;
-    cursor: pointer;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    transition:
-        border-color 0.15s,
-        box-shadow 0.15s;
-    animation: ipoPulse 2.4s ease-in-out infinite;
-}
-.ipo-btn.hidden {
-    display: none;
-}
-.ipo-btn:active {
-    transform: scale(0.985);
-}
-.ipo-label {
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    color: var(--cost);
-}
-.ipo-amount {
-    font-family: var(--mono);
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--cost);
-}
-@keyframes ipoPulse {
-    0%,
-    100% {
-        box-shadow: 0 0 12px rgba(255, 209, 102, 0.15);
-    }
-    50% {
-        box-shadow: 0 0 24px rgba(255, 209, 102, 0.4);
-    }
-}
-
-.ipo-view {
-    padding: 20px 0;
-    text-align: center;
-}
-.ipo-view.hidden {
-    display: none;
-}
-.ipo-retired {
-    font-family: var(--mono);
-    font-size: 11px;
-    letter-spacing: 0.34em;
-    color: var(--cost);
-    text-transform: uppercase;
-    margin-bottom: 16px;
-    text-shadow: 0 0 12px rgba(255, 209, 102, 0.5);
-}
-.ipo-passive {
-    display: flex;
-    justify-content: center;
-    align-items: baseline;
-    gap: 6px;
-    margin-bottom: 10px;
-}
-.ipo-passive-k {
-    font-size: 10px;
-    letter-spacing: 0.2em;
-    color: var(--dim);
-}
-.ipo-passive-v {
-    font-family: var(--mono);
-    font-size: 22px;
-    font-weight: 700;
-    color: var(--good);
-    text-shadow: 0 0 14px rgba(77, 255, 166, 0.6);
-}
-.ipo-lifetime {
-    font-size: 11px;
-    color: var(--dim);
-    font-family: var(--mono);
-}
-
-.market-chip.ipoed {
-    border-color: rgba(255, 209, 102, 0.55);
-    background: linear-gradient(
-        180deg,
-        rgba(255, 209, 102, 0.08),
-        rgba(255, 209, 102, 0.01)
-    );
-}
-.market-chip.ipoed b {
-    color: var(--cost);
-}
-.market-chip.ipoed small {
-    color: var(--good);
-}
-
-.portfolio-row.ipoed .pr-name {
-    color: var(--cost);
-}
-.portfolio-row.ipoed .pr-info {
-    color: var(--good);
-}
-
 #profileEarned,
 #profileLifetimeCO,
 #profileLifetimeProfit,
 #profileBestCO {
     color: var(--quanta);
 }
-#profileIpoCount,
-#profileIpoPassive {
-    color: var(--cost);
-}
 #profilePlaytime {
     color: var(--dim);
+}
+#profileLevels,
+#profileLevelPassive {
+    color: var(--good);
 }
 
 .pill.good {
@@ -849,145 +716,73 @@ body {
         rgba(255, 62, 165, 0.03)
     );
 }
-.portfolio-row.debug .pr-name {
-    color: var(--surge);
-}
 
-.ipo-stars {
-    font-size: 24px;
-    line-height: 1;
-    color: var(--cost);
-    text-shadow: 0 0 18px rgba(255, 209, 102, 0.6);
-    letter-spacing: 2px;
-    margin-bottom: 8px;
-}
-.ipo-next {
-    font-family: var(--mono);
-    font-size: 10.5px;
-    color: var(--dim);
-    margin-bottom: 14px;
-}
-.ipo-reopen-btn {
-    display: inline-block;
-    padding: 12px 22px;
-    margin-top: 6px;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 209, 102, 0.6);
-    background: linear-gradient(
-        180deg,
-        rgba(255, 209, 102, 0.16),
-        rgba(255, 209, 102, 0.03)
-    );
-    color: var(--cost);
-    font-family: inherit;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    cursor: pointer;
-    transition:
-        border-color 0.15s,
-        box-shadow 0.15s,
-        transform 0.07s;
-}
-.ipo-reopen-btn:active {
-    transform: scale(0.985);
-}
-.ipo-reopen-btn:hover {
-    border-color: rgba(255, 209, 102, 0.9);
-    box-shadow: 0 0 20px rgba(255, 209, 102, 0.25);
-}
-.ipo-reopen-btn.hidden {
-    display: none;
-}
+.portfolio-row.debug .pr-name,
+.portfolio-row.debug .pr-info { color: var(--surge); }
 
-.rollback-btn {
-    width: 100%;
-    padding: 11px 14px;
-    margin-top: 10px;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 209, 102, 0.35);
-    background: linear-gradient(
-        180deg,
-        rgba(255, 209, 102, 0.06),
-        rgba(255, 209, 102, 0.01)
-    );
-    color: #fff;
-    font-family: inherit;
-    cursor: pointer;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    transition:
-        border-color 0.15s,
-        box-shadow 0.15s,
-        transform 0.07s;
-}
-.rollback-btn.hidden {
-    display: none;
-}
-.rollback-btn:active {
-    transform: scale(0.985);
-}
-.rollback-btn:hover {
-    border-color: rgba(255, 209, 102, 0.7);
-    box-shadow: 0 0 14px rgba(255, 209, 102, 0.15);
-}
-.rb-label {
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    color: var(--dim);
-}
-.rb-target {
-    font-family: var(--mono);
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--cost);
-}
+/* ============================================================
+   v9 — Market level system
+   ============================================================ */
 
-.ipo-panel {
+.level-panel {
     width: 100%;
     padding: 12px 14px;
     margin-top: 10px;
     border-radius: 12px;
-    border: 1px solid rgba(255, 209, 102, 0.3);
+    border: 1px solid rgba(63, 233, 255, 0.3);
     background: linear-gradient(
         180deg,
-        rgba(255, 209, 102, 0.05),
-        rgba(255, 209, 102, 0.01)
+        rgba(63, 233, 255, 0.05),
+        rgba(63, 233, 255, 0.01)
     );
     transition:
-        border-color 0.2s,
-        box-shadow 0.2s;
+        border-color 0.25s,
+        box-shadow 0.25s;
 }
-.ipo-panel.hidden {
-    display: none;
+
+/* Level-up flash */
+.level-panel.leveled {
+    border-color: rgba(77, 255, 166, 0.85);
+    box-shadow: 0 0 28px rgba(77, 255, 166, 0.35);
+    animation: levelPulse 0.45s ease;
 }
-.ipo-panel.ready {
-    border-color: rgba(77, 255, 166, 0.6);
-    box-shadow: 0 0 20px rgba(77, 255, 166, 0.15);
+@keyframes levelPulse {
+    0% {
+        transform: scale(1);
+    }
+    40% {
+        transform: scale(1.012);
+    }
+    100% {
+        transform: scale(1);
+    }
 }
-.ipo-panel-header {
+
+.level-panel-header {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
     margin-bottom: 8px;
 }
-.ipo-panel-title {
+.level-panel-title {
     font-size: 9.5px;
     letter-spacing: 0.22em;
     color: var(--dim);
     text-transform: uppercase;
 }
-.ipo-panel-stars {
+.level-panel-lv {
+    font-family: var(--mono);
     font-size: 13px;
-    color: var(--cost);
+    font-weight: 700;
+    color: var(--quanta);
     letter-spacing: 1px;
 }
-.ipo-panel.ready .ipo-panel-stars {
+.level-panel.leveled .level-panel-lv {
     color: var(--good);
+    text-shadow: 0 0 10px rgba(77, 255, 166, 0.7);
 }
-.ipo-bar {
+
+.level-bar {
     width: 100%;
     height: 6px;
     background: rgba(29, 41, 66, 0.7);
@@ -995,18 +790,18 @@ body {
     overflow: hidden;
     margin-bottom: 8px;
 }
-.ipo-bar-fill {
+.level-bar-fill {
     height: 100%;
     width: 0;
     background: linear-gradient(
         90deg,
-        rgba(255, 209, 102, 0.4),
-        rgba(255, 209, 102, 0.85)
+        rgba(63, 233, 255, 0.4),
+        rgba(63, 233, 255, 0.85)
     );
-    transition: width 0.4s ease;
     border-radius: 3px;
+    transition: width 0.4s ease;
 }
-.ipo-panel.ready .ipo-bar-fill {
+.level-panel.leveled .level-bar-fill {
     background: linear-gradient(
         90deg,
         rgba(77, 255, 166, 0.5),
@@ -1014,7 +809,8 @@ body {
     );
     box-shadow: 0 0 12px rgba(77, 255, 166, 0.5);
 }
-.ipo-panel-meta {
+
+.level-panel-meta {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
@@ -1022,36 +818,20 @@ body {
     font-size: 11px;
     margin-bottom: 6px;
 }
-.ipo-panel-pct {
-    color: var(--cost);
+.level-panel-pct {
+    color: var(--quanta);
     font-weight: 700;
 }
-.ipo-panel.ready .ipo-panel-pct {
+.level-panel.leveled .level-panel-pct {
     color: var(--good);
 }
-.ipo-panel-amount {
+.level-panel-amount {
     color: var(--dim);
 }
-.ipo-panel-reward {
+
+.level-panel-reward {
     font-family: var(--mono);
     font-size: 11px;
     color: var(--good);
-    margin-bottom: 10px;
     line-height: 1.4;
-}
-.ipo-panel .ipo-btn {
-    margin-top: 0;
-    width: 100%;
-    animation: none;
-}
-.ipo-panel .ipo-btn.can {
-    animation: ipoPulse 2.4s ease-in-out infinite;
-}
-.ipo-panel .ipo-btn.poor {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-.ipo-panel .ipo-btn.poor .ipo-label,
-.ipo-panel .ipo-btn.poor .ipo-amount {
-    color: var(--dim2);
 }

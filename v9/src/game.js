@@ -37,18 +37,24 @@ export const Game = (() => {
     function cashOut(id) {
         const r = Market.cashOut(id);
         if (r.ok) {
-            if (r.milestoneHit) {
+            if (r.levelUp) {
                 UI.toast(
-                    "MILESTONE! +" +
-                        Format.num(r.value) +
-                        " Q cash out + " +
-                        Format.num(r.milestoneBonusQ) +
-                        " Q bonus · dividend now +" +
-                        Math.round(r.newMilestoneBonus * 100) +
-                        "%"
+                    "⭐ LEVEL " +
+                        r.newLevel +
+                        " · +" +
+                        Format.num(r.bonusGained) +
+                        " Q/s passive · tip +" +
+                        Format.num(r.tip) +
+                        " Q"
                 );
             } else {
-                UI.toast("Cashed out +" + Format.num(r.value) + " Q");
+                UI.toast(
+                    "Cashed out +" +
+                        Format.num(r.value) +
+                        " Q (+" +
+                        Format.num(r.tip) +
+                        " tip)"
+                );
             }
             Save.write();
             UI.render();
@@ -56,8 +62,6 @@ export const Game = (() => {
             if (r.reason === "not-full")
                 UI.toast("Pool not full · trade more to fill it");
             else if (r.reason === "cooldown") UI.toast("Cash out on cooldown");
-            else if (r.reason === "ipoed")
-                UI.toast("Market is IPO'd — no cash out");
         }
     }
 
@@ -89,9 +93,19 @@ export const Game = (() => {
             UI.render();
         }
     }
+
     function upgradePoolBuffer() {
+        const wasMax =
+            (State.get().poolBuffer || 0) >= Config.POOL_BUFFER_MAX_LEVEL;
+        if (wasMax) {
+            UI.toast("Overflow Valve maxed");
+            return;
+        }
         if (Market.upgradePoolBuffer()) {
-            UI.toast("Pool Buffer leveled up · +10% pool max");
+            UI.toast(
+                "Overflow Valve leveled up · pool cap ×" +
+                    Market.poolBufferMult().toFixed(2)
+            );
             Save.write();
             UI.render();
         }
@@ -125,112 +139,6 @@ export const Game = (() => {
             UI.toast("Market reset · q restored to " + Format.num(r.amount));
             Save.write();
             UI.render();
-        }
-    }
-
-    function ipoMarket(id) {
-        const stars = Market.starsOf(id);
-        const target = Math.min(Config.IPO_MAX_STARS, stars + 1);
-        const msg =
-            stars === 0
-                ? "Take " +
-                  Market.def(id).name +
-                  " public? Market becomes untradeable and contributes passive Q/s forever."
-                : "Take " +
-                  Market.def(id).name +
-                  " public again? You'll earn ⭐" +
-                  target +
-                  " and passive goes to " +
-                  (1 + 0.5 * (target - 1)) +
-                  "× base.";
-        if (!confirm(msg)) return;
-        const r = Market.ipoMarket(id);
-        if (r.ok) {
-            UI.toast(
-                "IPO! ⭐".repeat(r.newStars).trim() +
-                    " · +" +
-                    Format.num(r.lump) +
-                    " Q · +" +
-                    Format.num(r.passive) +
-                    " Q/s forever"
-            );
-            Save.write();
-            UI.render();
-        } else {
-            if (r.reason === "has-holding")
-                UI.toast("Sell all units before IPO");
-            else if (r.reason === "low-lifetime")
-                UI.toast("Not enough lifetime cash out");
-            else if (r.reason === "already-ipoed") UI.toast("Already IPO'd");
-            else if (r.reason === "maxed")
-                UI.toast("Maxed at " + Config.IPO_MAX_STARS + " stars");
-        }
-    }
-
-    function reopenMarket(id) {
-        const stars = Market.starsOf(id);
-        const name = Market.def(id).name;
-        if (
-            !confirm(
-                "Reopen " +
-                    name +
-                    "? Passive income stops while you trade for ⭐" +
-                    (stars + 1) +
-                    "."
-            )
-        )
-            return;
-        const r = Market.reopenMarket(id);
-        if (r.ok) {
-            UI.toast(
-                "Market reopened · passive paused · wave is " +
-                    stars +
-                    "-star difficulty"
-            );
-            Save.write();
-            UI.render();
-        } else {
-            if (r.reason === "maxed")
-                UI.toast(
-                    "Market is fully maxed (⭐" + Config.IPO_MAX_STARS + ")"
-                );
-            else if (r.reason === "not-ipoed") UI.toast("Market is not IPO'd");
-        }
-    }
-
-    function rollbackMarket(id) {
-        const stars = Market.starsOf(id);
-        const name = Market.def(id).name;
-        if (
-            !confirm(
-                "Rollback " +
-                    name +
-                    " to ⭐" +
-                    stars +
-                    " IPO?\n\n" +
-                    "You'll lose all current trading progress (wallet, units, pool).\n" +
-                    "You'll keep your lifetime cash out and passive income resumes at ⭐" +
-                    stars +
-                    "."
-            )
-        )
-            return;
-        const r = Market.rollbackMarket(id);
-        if (r.ok) {
-            UI.toast(
-                "Rolled back to ⭐" +
-                    r.stars +
-                    " · passive +" +
-                    Format.num(r.passive) +
-                    " Q/s resumed"
-            );
-            Save.write();
-            UI.render();
-        } else {
-            if (r.reason === "already-ipoed") UI.toast("Already IPO'd");
-            else if (r.reason === "never-ipoed")
-                UI.toast("Market was never IPO'd");
-            else if (r.reason === "locked") UI.toast("Market locked");
         }
     }
 
@@ -298,9 +206,6 @@ export const Game = (() => {
             upgradePassiveYield,
             upgradeReaction,
             resetMarket,
-            ipoMarket,
-            reopenMarket,
-            rollbackMarket,
             selectMarket,
             reset
         });

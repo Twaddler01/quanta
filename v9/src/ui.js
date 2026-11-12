@@ -127,17 +127,6 @@ export const UI = (() => {
             [cashOutFill, cashOutLabel, cashOutAmount]
         );
 
-        const cashOutMeta = el(
-            "div",
-            { className: "cashout-meta", id: "cashOutMeta" },
-            "—"
-        );
-        const milestoneRow = el(
-            "div",
-            { className: "milestone-row", id: "milestoneRow" },
-            "—"
-        );
-
         const resetMarketBtn = el(
             "button",
             {
@@ -150,7 +139,7 @@ export const UI = (() => {
                         !confirm(
                             "Reset " +
                                 name +
-                                "? Shares and lifetime progress are preserved, q will be refilled."
+                                "? Shares, lifetime and level are preserved, q will be refilled."
                         )
                     )
                         return;
@@ -163,68 +152,37 @@ export const UI = (() => {
             ]
         );
 
-        const rollbackBtn = el(
-            "button",
-            {
-                className: "rollback-btn hidden",
-                id: "rollbackBtn",
-                onClick: () => {
-                    actions.rollbackMarket(State.get().activeMarket);
-                }
-            },
-            [
-                span({ className: "rb-label" }, "ROLLBACK"),
-                span(
-                    { className: "rb-target", id: "rollbackTarget" },
-                    "← ⭐1 IPO"
-                )
-            ]
-        );
-
-        const ipoPanel = el(
+        /* ---- level panel (replaces IPO panel) ---- */
+        const levelPanel = el(
             "div",
-            { className: "ipo-panel hidden", id: "ipoPanel" },
+            { className: "level-panel", id: "levelPanel" },
             [
-                div({ className: "ipo-panel-header" }, [
-                    span({ className: "ipo-panel-title" }, "IPO PROGRESS"),
+                div({ className: "level-panel-header" }, [
+                    span({ className: "level-panel-title" }, "MARKET LEVEL"),
                     span(
-                        { className: "ipo-panel-stars", id: "ipoPanelStars" },
-                        "—"
+                        { className: "level-panel-lv", id: "levelPanelLv" },
+                        "LV 0"
                     )
                 ]),
-                div({ className: "ipo-bar" }, [
-                    div({ className: "ipo-bar-fill", id: "ipoBarFill" })
+                div({ className: "level-bar" }, [
+                    div({ className: "level-bar-fill", id: "levelBarFill" })
                 ]),
-                div({ className: "ipo-panel-meta" }, [
+                div({ className: "level-panel-meta" }, [
                     span(
-                        { className: "ipo-panel-pct", id: "ipoPanelPct" },
+                        { className: "level-panel-pct", id: "levelPanelPct" },
                         "0%"
                     ),
                     span(
-                        { className: "ipo-panel-amount", id: "ipoPanelAmount" },
-                        "—"
+                        {
+                            className: "level-panel-amount",
+                            id: "levelPanelAmount"
+                        },
+                        "0 / 10 cash outs"
                     )
                 ]),
                 div(
-                    { className: "ipo-panel-reward", id: "ipoPanelReward" },
-                    "—"
-                ),
-                el(
-                    "button",
-                    {
-                        className: "ipo-btn",
-                        id: "ipoBtn",
-                        onClick: () => {
-                            actions.ipoMarket(State.get().activeMarket);
-                        }
-                    },
-                    [
-                        span(
-                            { className: "ipo-label", id: "ipoLabel" },
-                            "GO PUBLIC"
-                        ),
-                        span({ className: "ipo-amount", id: "ipoAmount" }, "—")
-                    ]
+                    { className: "level-panel-reward", id: "levelPanelReward" },
+                    "Passive: +0 Q/s"
                 )
             ]
         );
@@ -245,46 +203,6 @@ export const UI = (() => {
             ]
         );
 
-        const ipoStars = el(
-            "div",
-            { className: "ipo-stars", id: "ipoStars" },
-            "⭐"
-        );
-        const ipoNext = el("div", { className: "ipo-next", id: "ipoNext" }, "");
-        const ipoReopenBtn = el(
-            "button",
-            {
-                className: "ipo-reopen-btn",
-                id: "ipoReopenBtn",
-                onClick: () => {
-                    actions.reopenMarket(State.get().activeMarket);
-                }
-            },
-            "REOPEN MARKET"
-        );
-
-        const ipoView = el(
-            "div",
-            { className: "ipo-view hidden", id: "ipoView" },
-            [
-                ipoStars,
-                div({ className: "ipo-retired" }, "RETIRED"),
-                div({ className: "ipo-passive" }, [
-                    span({ className: "ipo-passive-k" }, "PASSIVE INCOME "),
-                    span(
-                        { className: "ipo-passive-v", id: "ipoPassiveRate" },
-                        "—"
-                    )
-                ]),
-                div({ className: "ipo-lifetime" }, [
-                    span({}, "Lifetime cash out: "),
-                    span({ id: "ipoLifetime" }, "—")
-                ]),
-                ipoNext,
-                ipoReopenBtn
-            ]
-        );
-
         const activePanel = el("div", { className: "panel market-panel" }, [
             activeTitle,
             activeSubtitle,
@@ -293,13 +211,9 @@ export const UI = (() => {
             statRows,
             tradeBlock,
             cashOutBtn,
-            cashOutMeta,
-            milestoneRow,
             resetMarketBtn,
-            rollbackBtn,
-            ipoPanel,
-            upgradeBtn,
-            ipoView
+            levelPanel,
+            upgradeBtn
         ]);
 
         const contributionRows = el("div", {
@@ -375,7 +289,7 @@ export const UI = (() => {
                 }
             },
             [
-                div({ className: "upg-title" }, "Pool Buffer"),
+                div({ className: "upg-title" }, "Overflow Valve"),
                 div({ className: "upg-desc", id: "bufferDesc" }, "—"),
                 div({ className: "upg-cost", id: "bufferCost" }, "—")
             ]
@@ -432,8 +346,8 @@ export const UI = (() => {
             row("Total lifetime profit", "profileLifetimeProfit"),
             row("Total cash outs", "profileCashOuts"),
             row("Best single cash out", "profileBestCO"),
-            row("Markets IPO'd", "profileIpoCount"),
-            row("Total IPO passive", "profileIpoPassive"),
+            row("Total market levels", "profileLevels"),
+            row("Level passive", "profileLevelPassive"),
             row("Playtime", "profilePlaytime")
         ]);
         const profilePanel = el("div", { className: "panel" }, [
@@ -479,9 +393,6 @@ export const UI = (() => {
         upgradePassiveYield: () => {},
         upgradeReaction: () => {},
         resetMarket: () => {},
-        ipoMarket: () => {},
-        reopenMarket: () => {},
-        rollbackMarket: () => {},
         selectMarket: () => {},
         reset: () => {}
     };
@@ -573,7 +484,6 @@ export const UI = (() => {
         if (cur > maxP) maxP = cur;
 
         if (mDef.chartYRange != null) {
-            /* fixed scale — keeps fast waves stable */
             const base = Market.marketBasePrice(id);
             minP = base * (1 - mDef.chartYRange);
             maxP = base * (1 + mDef.chartYRange);
@@ -646,7 +556,6 @@ export const UI = (() => {
         const id = s.activeMarket;
         const mk = s.markets[id];
         const t = Date.now() / 1000;
-        const ipoed = Market.isIPO(id);
 
         /* ============ HUD ============ */
         $("#bigQ").textContent = Format.num(s.Q);
@@ -665,7 +574,7 @@ export const UI = (() => {
 
         const passiveEl = $("#passivePill");
         const passiveRate =
-            Market.ipoPassiveTotal() + Market.passiveYieldRate();
+            Market.levelPassiveTotal() + Market.passiveYieldRate();
         passiveEl.textContent = "+" + Format.num(passiveRate) + "/s";
         passiveEl.style.color =
             passiveRate > 0.01 ? "var(--good)" : "var(--dim2)";
@@ -680,31 +589,23 @@ export const UI = (() => {
         for (const m of Config.MARKETS) {
             const unlocked = Market.isUnlocked(m.id);
             const seen = s.seenMarkets[m.id] !== false;
-            const mIpoed = Market.isIPO(m.id);
             const isDebug = Config.isDebugMarket(m.id);
-            const stars = Market.starsOf(m.id);
+            const level = Market.levelOf(m.id);
             const ref = marketChipEls[m.id];
 
             ref.btn.classList.toggle("active", m.id === id);
             ref.btn.classList.toggle("locked", !unlocked);
             ref.btn.classList.toggle("unread", unlocked && !seen);
-            ref.btn.classList.toggle("ipoed", mIpoed);
             ref.btn.classList.toggle("debug", isDebug);
 
-            const starPrefix = stars > 0 ? "⭐".repeat(stars) + " " : "";
+            const lvPrefix = level > 0 ? "LV" + level + " " : "";
 
             if (!unlocked) {
                 ref.nameEl.textContent = "🔒 " + m.name;
                 ref.subEl.textContent =
                     "unlock " + Format.num(m.unlockAt) + " Q";
-            } else if (mIpoed) {
-                ref.nameEl.textContent = starPrefix + m.name;
-                ref.subEl.textContent =
-                    "IPO · +" +
-                    Format.num(Market.ipoPassiveRate(m.id)) +
-                    " Q/s";
             } else {
-                ref.nameEl.textContent = starPrefix + m.name;
+                ref.nameEl.textContent = lvPrefix + m.name;
                 const mk2 = s.markets[m.id];
                 const cap2 = Market.poolMax(m.id);
                 const stats =
@@ -721,54 +622,14 @@ export const UI = (() => {
 
         /* ============ Market header ============ */
         const mDef = Market.def(id);
-        const stars = Market.starsOf(id);
-        const starPrefix = stars > 0 ? "⭐".repeat(stars) + " · " : "";
-        $("#activeMarketName").textContent = ipoed
-            ? starPrefix + mDef.name + " · IPO'd"
-            : starPrefix +
-              mDef.name +
-              " · ×" +
-              Format.plain(Market.marketMultiplier(id)) +
-              " mult";
-
-        /* ============ show/hide trading vs IPO view ============ */
-        const tradeNodes = [
-            $("#marketStatus"),
-            $(".chart-wrap"),
-            $("#marketStats"),
-            $(".trade-grid"),
-            $("#cashOutBtn"),
-            $("#cashOutMeta"),
-            $("#milestoneRow"),
-            $("#resetMarketBtn"),
-            $("#rollbackBtn"),
-            $("#ipoPanel"),
-            $("#upgradeShareBtn")
-        ];
-        tradeNodes.forEach(n => {
-            if (n) n.style.display = ipoed ? "none" : "";
-        });
-        $("#ipoView").classList.toggle("hidden", !ipoed);
-
-        if (ipoed) {
-            const maxed = stars >= Config.IPO_MAX_STARS;
-            $("#ipoStars").textContent = "⭐".repeat(stars);
-            $("#ipoPassiveRate").textContent =
-                "+" + Format.num(Market.ipoPassiveRate(id)) + " Q/s";
-            $("#ipoLifetime").textContent =
-                Format.num(mk.lifetimeCashOut) + " Q";
-            $("#ipoNext").textContent = maxed
-                ? "MAXED at ⭐" + Config.IPO_MAX_STARS
-                : "Next: " +
-                  "⭐".repeat(stars + 1) +
-                  " (needs " +
-                  Format.num(Market.nextIpoThreshold(id)) +
-                  " Q lifetime)";
-            $("#ipoReopenBtn").classList.toggle("hidden", maxed);
-            drawChart();
-            renderPortfolioAndProfile();
-            return;
-        }
+        const level = Market.levelOf(id);
+        const lvPrefix = level > 0 ? "LV" + level + " · " : "";
+        $("#activeMarketName").textContent =
+            lvPrefix +
+            mDef.name +
+            " · ×" +
+            Format.plain(Market.marketMultiplier(id)) +
+            " mult";
 
         /* ============ Market status ============ */
         $("#statusShares").textContent = mk.shares;
@@ -916,13 +777,15 @@ export const UI = (() => {
         const coLabel = $("#cashOutLabel");
         const coAmt = $("#cashOutAmount");
         const val = Market.cashOutValue(id);
+        const tip = val * Config.LEVEL_TIP_PCT;
 
         const pct = Math.min(100, cCheck.pct || 0);
         coFill.style.width = pct + "%";
 
         if (cCheck.ok) {
             coLabel.textContent = "CASH OUT";
-            coAmt.textContent = "+" + Format.num(val) + " Q";
+            coAmt.textContent =
+                "+" + Format.num(val) + " Q (+" + Format.num(tip) + ")";
             coBtn.classList.add("can", "full");
             coBtn.classList.remove("poor");
         } else if (cCheck.reason === "cooldown") {
@@ -937,34 +800,6 @@ export const UI = (() => {
             coBtn.classList.add("poor");
         }
 
-        /* cash out meta + milestone */
-        const prog = Market.nextMilestoneProgress(id);
-        $("#cashOutMeta").textContent =
-            "Lifetime: " +
-            Format.num(mk.lifetimeCashOut) +
-            " Q · " +
-            prog.current +
-            "/" +
-            prog.required +
-            " to milestone";
-        $("#cashOutMeta").style.color = prog.toNext === 1 ? "var(--cost)" : "";
-
-        const mileBonusPct = Math.round(mk.milestoneBonus * 100);
-        const nextBonusMult = Config.MILESTONE_BONUS_MULT + 1;
-        $("#milestoneRow").textContent =
-            mk.cashOutCount === 0
-                ? "Next milestone in " +
-                  prog.toNext +
-                  " · pays ×" +
-                  nextBonusMult +
-                  " cash out + permanent +2%"
-                : "Permanent bonus: +" +
-                  mileBonusPct +
-                  "% · next in " +
-                  prog.toNext +
-                  " cash out" +
-                  (prog.toNext === 1 ? "" : "s");
-
         /* reset */
         const rCheck = Market.canReset(id);
         const rBtn = $("#resetMarketBtn");
@@ -976,57 +811,30 @@ export const UI = (() => {
             rBtn.classList.add("hidden");
         }
 
-        /* rollback — only when reopened (stars > 0, not IPO'd) */
-        const rollbackCheck = Market.canRollback(id);
-        const rollbackBtnEl = $("#rollbackBtn");
-        if (rollbackCheck.ok) {
-            rollbackBtnEl.classList.remove("hidden");
-            $("#rollbackTarget").textContent = "← ⭐" + stars + " IPO";
+        /* level panel */
+        const lp = Market.levelProgress(id);
+        $("#levelPanelLv").textContent = "LV " + lp.level;
+        $("#levelBarFill").style.width = lp.pct.toFixed(1) + "%";
+        $("#levelPanelPct").textContent = Math.round(lp.pct) + "%";
+        $("#levelPanelAmount").textContent =
+            lp.within + " / " + lp.stepSize + " cash outs";
+
+        const currentPassive = lp.currentPassive;
+        if (lp.level === 0) {
+            $("#levelPanelReward").textContent =
+                "Next level: +" + Format.num(lp.nextBonus) + " Q/s";
         } else {
-            rollbackBtnEl.classList.add("hidden");
+            $("#levelPanelReward").textContent =
+                "Passive: +" +
+                Format.num(currentPassive) +
+                " Q/s · Next level: +" +
+                Format.num(lp.nextBonus);
         }
 
-        /* IPO progress panel */
-        const ipoProg = Market.ipoProgress(id);
-        const ipoPanelEl = $("#ipoPanel");
-        ipoPanelEl.classList.remove("hidden");
-        ipoPanelEl.classList.toggle("ready", ipoProg.ready);
-
-        const starStr = n => "⭐".repeat(n);
-        $("#ipoPanelStars").textContent =
-            (ipoProg.currentStars > 0
-                ? starStr(ipoProg.currentStars) + " → "
-                : "") + starStr(ipoProg.nextStars);
-
-        $("#ipoBarFill").style.width = Math.min(100, ipoProg.pct) + "%";
-        $("#ipoPanelPct").textContent = Math.round(ipoProg.pct) + "%";
-        $("#ipoPanelAmount").textContent =
-            Format.num(ipoProg.current) +
-            " / " +
-            Format.num(ipoProg.required) +
-            " lifetime";
-
-        $("#ipoPanelReward").textContent =
-            "Reward: +" +
-            Format.num(ipoProg.projectedPassive) +
-            " Q/s passive · +" +
-            Format.num(ipoProg.projectedLump) +
-            " Q lump";
-
-        $("#ipoLabel").textContent =
-            ipoProg.currentStars === 0
-                ? "GO PUBLIC (IPO)"
-                : "RE-IPO (⭐" + ipoProg.nextStars + ")";
-        $("#ipoAmount").textContent =
-            "+" +
-            Format.num(ipoProg.projectedLump) +
-            " Q · +" +
-            Format.num(ipoProg.projectedPassive) +
-            " Q/s";
-
-        const ipoBtnEl = $("#ipoBtn");
-        ipoBtnEl.classList.toggle("can", ipoProg.ready);
-        ipoBtnEl.classList.toggle("poor", !ipoProg.ready);
+        const lvlPanelEl = $("#levelPanel");
+        const flashLeveled =
+            mk.lastLevelUpTime && Date.now() - mk.lastLevelUpTime < 1400;
+        lvlPanelEl.classList.toggle("leveled", !!flashLeveled);
 
         /* share upgrade */
         const upCost = Market.shareUpgradeCost(id);
@@ -1084,53 +892,24 @@ export const UI = (() => {
                 );
                 continue;
             }
-            const mIpoed = Market.isIPO(m.id);
-            const stars = Market.starsOf(m.id);
-            const starPrefix = stars > 0 ? "⭐".repeat(stars) + " " : "";
-            if (mIpoed) {
-                rows.push(
-                    div(
-                        {
-                            className:
-                                "portfolio-row ipoed" +
-                                (isDebug ? " debug" : "")
-                        },
-                        [
-                            span(
-                                { className: "pr-name" },
-                                starPrefix + m.name + debugTag
-                            ),
-                            span(
-                                { className: "pr-info" },
-                                "+" +
-                                    Format.num(Market.ipoPassiveRate(m.id)) +
-                                    " Q/s · IPO"
-                            )
-                        ]
-                    )
-                );
-                continue;
-            }
+            const level = Market.levelOf(m.id);
+            const lvPrefix = level > 0 ? "LV" + level + " " : "";
             const mk2 = s.markets[m.id];
             const cap2 = Market.poolMax(m.id);
             const rate2 = Market.currentInterestRate(m.id);
+            const lpRate = Market.levelPassiveRate(m.id);
+            let info = Format.num(mk2.pool) + "/" + Format.num(cap2) + "q";
+            if (rate2 > 0.01) info += " · +" + Format.num(rate2) + "/s";
+            if (lpRate > 0.01) info += " · +" + Format.num(lpRate) + "/s";
             rows.push(
                 div(
                     { className: "portfolio-row" + (isDebug ? " debug" : "") },
                     [
                         span(
                             { className: "pr-name" },
-                            starPrefix + m.name + debugTag
+                            lvPrefix + m.name + debugTag
                         ),
-                        span({ className: "pr-info" }, [
-                            Format.num(mk2.pool) +
-                                "/" +
-                                Format.num(cap2) +
-                                "q" +
-                                (rate2 > 0.01
-                                    ? " · +" + Format.num(rate2) + "/s"
-                                    : "")
-                        ])
+                        span({ className: "pr-info" }, info)
                     ]
                 )
             );
@@ -1141,10 +920,10 @@ export const UI = (() => {
             (sum, m) => sum + s.markets[m.id].pool,
             0
         );
-        const ipoP = Market.ipoPassiveTotal();
+        const lp = Market.levelPassiveTotal();
         const py = Market.passiveYieldRate();
         let totalLine = "Total pool: " + Format.num(totalPool) + " q";
-        if (ipoP > 0) totalLine += " · IPO +" + Format.num(ipoP) + "/s";
+        if (lp > 0) totalLine += " · Levels +" + Format.num(lp) + "/s";
         if (py > 0) totalLine += " · Yield +" + Format.num(py) + "/s";
         $("#portfolioTotal").textContent = totalLine;
 
@@ -1197,14 +976,25 @@ export const UI = (() => {
         $("#marketLeverageBtn").classList.toggle("poor", lMaxed || s.Q < lCost);
 
         const pbCost = Market.poolBufferCost();
-        $("#bufferDesc").textContent =
-            "LV " +
-            s.poolBuffer +
-            " · pool max ×" +
-            Format.plain(Market.poolBufferMult());
-        $("#bufferCost").textContent = Format.num(pbCost) + " Q";
-        $("#poolBufferBtn").classList.toggle("can", s.Q >= pbCost);
-        $("#poolBufferBtn").classList.toggle("poor", s.Q < pbCost);
+        const pbMaxed = s.poolBuffer >= Config.POOL_BUFFER_MAX_LEVEL;
+        const pbNow = Market.poolBufferMult();
+        const pbNext = Math.max(
+            0.5,
+            1 - (s.poolBuffer + 1) * Config.POOL_BUFFER_PER_LEVEL
+        );
+        $("#bufferDesc").textContent = pbMaxed
+            ? "LV " + s.poolBuffer + " · MAXED (pool cap ×" + pbNow.toFixed(2) + ")"
+            : "LV " +
+              s.poolBuffer +
+              " · pool cap ×" +
+              pbNow.toFixed(2) +
+              " → ×" +
+              pbNext.toFixed(2);
+        $("#bufferCost").textContent = pbMaxed
+            ? "MAX"
+            : Format.num(pbCost) + " Q";
+        $("#poolBufferBtn").classList.toggle("can", !pbMaxed && s.Q >= pbCost);
+        $("#poolBufferBtn").classList.toggle("poor", pbMaxed || s.Q < pbCost);
 
         const pyCost = Market.passiveYieldCost();
         const pyRate = Market.passiveYieldRate();
@@ -1247,10 +1037,10 @@ export const UI = (() => {
             Format.num(Market.totalLifetimeProfit()) + " Q";
         $("#profileCashOuts").textContent = Market.totalCashOuts().toString();
         $("#profileBestCO").textContent = Format.num(s.bestCashOut || 0) + " Q";
-        $("#profileIpoCount").textContent =
-            Market.ipoedCount() + "/" + Config.liveMarkets().length;
-        $("#profileIpoPassive").textContent =
-            Format.num(Market.ipoPassiveTotal()) + " Q/s";
+        $("#profileLevels").textContent =
+            Market.totalLevels() + " across " + Config.liveMarkets().length;
+        $("#profileLevelPassive").textContent =
+            Format.num(Market.levelPassiveTotal()) + " Q/s";
         $("#profilePlaytime").textContent = Format.time(
             (Date.now() - s.start) / 1000
         );

@@ -32,29 +32,6 @@ export const Market = (() => {
         return Math.max(0.3, 1 - lv * Config.REACTION_PER_LEVEL);
     }
 
-    /* ---- star system ---- */
-
-    function starsOf(id) {
-        const s = State.get();
-        return (s.stars && s.stars[id]) || 0;
-    }
-
-    function waveDiffOf(id) {
-        const stars = starsOf(id);
-        const f = Math.max(0, stars - 1);
-        const w = waveOf(id);
-        const periodFloor = w.periodMultFloor ?? 0.3;
-        return {
-            noiseMult: 1 + Config.STAR_NOISE_PER * f,
-            periodMult: Math.max(periodFloor, 1 - Config.STAR_PERIOD_PER * f)
-        };
-    }
-
-    function nextIpoThreshold(id) {
-        const stars = starsOf(id);
-        return Config.IPO_MIN_LIFETIME * Math.pow(3, stars);
-    }
-
     function basePrice() {
         return Config.BASE_PRICE;
     }
@@ -67,10 +44,9 @@ export const Market = (() => {
         const base = marketBasePrice(id);
         const phase = State.get().noisePhase;
         const ampBoost = waveAmpMult();
-        const diff = waveDiffOf(id);
         const damp = signalMult();
 
-        const tp = t * periodMultOf(id) * diff.periodMult;
+        const tp = t * periodMultOf(id);
         let weather =
             Math.sin((tp / w.period1) * Math.PI * 2) * w.amp1 * ampBoost +
             Math.sin((tp / w.period2) * Math.PI * 2 + 0.7) * w.amp2 * ampBoost;
@@ -83,7 +59,7 @@ export const Market = (() => {
         }
 
         const tn = t * noiseMultOf(id);
-        const nAmp = w.noiseAmp * diff.noiseMult * damp;
+        const nAmp = w.noiseAmp * damp;
         const noise =
             Math.sin(tn * 3.7 + phase) * nAmp * 0.6 +
             Math.sin(tn * 8.3 + phase * 1.7) * nAmp * 0.4;
@@ -100,13 +76,12 @@ export const Market = (() => {
         const pm = periodMultOf(id);
         const nm = noiseMultOf(id);
         const ampBoost = waveAmpMult();
-        const diff = waveDiffOf(id);
         const damp = signalMult();
-        const nAmp = w.noiseAmp * diff.noiseMult * damp;
+        const nAmp = w.noiseAmp * damp;
         let sum = 0;
         for (let i = 0; i < N; i++) {
             const tt = t - SPAN + (i / N) * SPAN;
-            const tp = tt * pm * diff.periodMult;
+            const tp = tt * pm;
             let weather =
                 Math.sin((tp / w.period1) * Math.PI * 2) * w.amp1 * ampBoost +
                 Math.sin((tp / w.period2) * Math.PI * 2 + 0.7) *
@@ -154,13 +129,12 @@ export const Market = (() => {
     }
     function poolBufferMult() {
         const lv = State.get().poolBuffer || 0;
-        return 1 + lv * Config.POOL_BUFFER_PER_LEVEL;
+        return Math.max(0.5, 1 - lv * Config.POOL_BUFFER_PER_LEVEL);
     }
 
     /* ---- pool ---- */
 
     function poolMax(id) {
-        if (isIPO(id)) return 0;
         const m = def(id);
         return (
             Config.POOL_MAX_BASE *
@@ -186,183 +160,55 @@ export const Market = (() => {
         );
     }
 
-    function totalInterestRate() {
-        let sum = 0;
-        for (const m of Config.MARKETS) sum += currentInterestRate(m.id);
-        return sum;
-    }
-
-    /* ---- unlock / IPO state ---- */
+    /* ---- unlock ---- */
 
     function isUnlocked(id) {
         return State.get().total >= def(id).unlockAt;
     }
-    function isIPO(id) {
-        return State.get().ipoed?.[id] === true;
-    }
 
-    /* ---- IPO ---- */
+    /* ---- level system ---- */
 
-    function canIPO(id) {
-        const s = State.get();
-        const mk = s.markets[id];
-        if (isIPO(id)) return { ok: false, reason: "already-ipoed" };
-        if (starsOf(id) >= Config.IPO_MAX_STARS)
-            return { ok: false, reason: "maxed" };
-        if (!isUnlocked(id)) return { ok: false, reason: "locked" };
-        if (mk.holding > 0) return { ok: false, reason: "has-holding" };
-        const required = nextIpoThreshold(id);
-        if (mk.lifetimeCashOut < required) {
-            return {
-                ok: false,
-                reason: "low-lifetime",
-                current: mk.lifetimeCashOut,
-                required
-            };
-        }
-        return { ok: true };
-    }
-
-    function ipoPassiveRate(id) {
-        if (!isIPO(id)) return 0;
-        const stars = starsOf(id);
-        if (stars === 0) return 0;
-        const m = def(id);
+    function levelOf(id) {
         const mk = State.get().markets[id];
-        if (!mk.lifetimeCashOut || mk.lifetimeCashOut < Config.IPO_MIN_LIFETIME)
-            return 0;
-        const starBonus = 1 + 0.5 * (stars - 1);
-        return (
-            m.tierWeight *
-            Config.IPO_PASSIVE_PER_TIER *
-            Math.sqrt(mk.lifetimeCashOut / Config.IPO_MIN_LIFETIME) *
-            starBonus
-        );
+        return mk.level || 0;
     }
 
-    function ipoLumpSum(id) {
+    function levelProgress(id) {
         const mk = State.get().markets[id];
-        return mk.lifetimeCashOut * Config.IPO_LUMP_MULT;
+        const level = mk.level || 0;
+        const cashes = mk.cashOutCount || 0;
+        const atCurrent = Config.levelThreshold(level);
+        const atNext = Config.levelThreshold(level + 1);
+        const stepSize = atNext - atCurrent;
+        const within = cashes - atCurrent;
+        return {
+            level,
+            cashOuts: cashes,
+            atCurrent,
+            atNext,
+            stepSize,
+            within,
+            pct: stepSize > 0 ? Math.min(100, (within / stepSize) * 100) : 0,
+            nextBonus: Config.bonusAtLevel(level + 1),
+            currentPassive: levelPassiveRate(id),
+            nextPassive: levelPassiveRate(id) + Config.bonusAtLevel(level + 1)
+        };
     }
 
-    function ipoMarket(id) {
-        const check = canIPO(id);
-        if (!check.ok) return { ok: false, reason: check.reason };
-        const s = State.get();
-        const lump = ipoLumpSum(id);
-        s.stars[id] = Math.min(Config.IPO_MAX_STARS, starsOf(id) + 1);
-        s.ipoed[id] = true;
-        s.Q += lump;
-        s.total += lump;
-        const passive = ipoPassiveRate(id);
-        return { ok: true, lump, passive, newStars: s.stars[id] };
+    function levelPassiveRate(id) {
+        return Config.totalLevelBonus(levelOf(id));
     }
 
-    function ipoPassiveTotal() {
+    function levelPassiveTotal() {
         let sum = 0;
-        for (const m of Config.liveMarkets()) {
-            if (isIPO(m.id)) sum += ipoPassiveRate(m.id);
-        }
+        for (const m of Config.liveMarkets()) sum += levelPassiveRate(m.id);
         return sum;
     }
 
-    function canReopen(id) {
-        if (!isIPO(id)) return { ok: false, reason: "not-ipoed" };
-        if (starsOf(id) >= Config.IPO_MAX_STARS)
-            return { ok: false, reason: "maxed" };
-        return { ok: true };
-    }
-
-    function reopenMarket(id) {
-        const check = canReopen(id);
-        if (!check.ok) return { ok: false, reason: check.reason };
-        const s = State.get();
-        const mk = s.markets[id];
-        s.ipoed[id] = false;
-        mk.q = Config.STARTING_Q_PER_MARKET;
-        mk.holding = 0;
-        mk.costBasis = 0;
-        mk.pool = 0;
-        mk.recentProfit = 0;
-        mk.interestExpiresAt = 0;
-        mk.cashOutCooldown = 0;
-        mk.resetCooldown = 0;
-        return { ok: true };
-    }
-
-    function canRollback(id) {
-        if (!isUnlocked(id)) return { ok: false, reason: "locked" };
-        if (isIPO(id)) return { ok: false, reason: "already-ipoed" };
-        if (starsOf(id) === 0) return { ok: false, reason: "never-ipoed" };
-        return { ok: true };
-    }
-
-    function rollbackMarket(id) {
-        const check = canRollback(id);
-        if (!check.ok) return { ok: false, reason: check.reason };
-        const s = State.get();
-        const mk = s.markets[id];
-        const stars = starsOf(id);
-
-        s.ipoed[id] = true;
-        mk.q = Config.STARTING_Q_PER_MARKET;
-        mk.holding = 0;
-        mk.costBasis = 0;
-        mk.pool = 0;
-        mk.recentProfit = 0;
-        mk.interestExpiresAt = 0;
-        mk.cashOutCooldown = 0;
-        mk.resetCooldown = 0;
-
-        return { ok: true, stars, passive: ipoPassiveRate(id) };
-    }
-
-    /* ---- IPO progress projection ---- */
-
-    function projectedIpoPassive(id) {
-        const m = def(id);
-        const mk = State.get().markets[id];
-        const newStars = Math.min(Config.IPO_MAX_STARS, starsOf(id) + 1);
-        if (newStars === 0) return 0;
-        const threshold = nextIpoThreshold(id);
-        const lifetime = Math.max(mk.lifetimeCashOut || 0, threshold);
-        if (lifetime < Config.IPO_MIN_LIFETIME) return 0;
-        const starBonus = 1 + 0.5 * (newStars - 1);
-        return (
-            m.tierWeight *
-            Config.IPO_PASSIVE_PER_TIER *
-            Math.sqrt(lifetime / Config.IPO_MIN_LIFETIME) *
-            starBonus
-        );
-    }
-
-    function projectedIpoLump(id) {
-        const mk = State.get().markets[id];
-        const threshold = nextIpoThreshold(id);
-        return (
-            Math.max(mk.lifetimeCashOut || 0, threshold) * Config.IPO_LUMP_MULT
-        );
-    }
-
-    function ipoProgress(id) {
-        const mk = State.get().markets[id];
-        const currentStars = starsOf(id);
-        const nextStars = Math.min(Config.IPO_MAX_STARS, currentStars + 1);
-        const required = nextIpoThreshold(id);
-        const current = mk.lifetimeCashOut || 0;
-        const pct =
-            required > 0 ? Math.min(100, (current / required) * 100) : 0;
-        return {
-            currentStars,
-            nextStars,
-            required,
-            current,
-            pct,
-            projectedPassive: projectedIpoPassive(id),
-            projectedLump: projectedIpoLump(id),
-            ready: canIPO(id).ok,
-            isIpoed: isIPO(id)
-        };
+    function totalLevels() {
+        let n = 0;
+        for (const m of Config.liveMarkets()) n += levelOf(m.id);
+        return n;
     }
 
     function passiveYieldRate() {
@@ -390,7 +236,6 @@ export const Market = (() => {
         return shareUpgradeCost(id) + Config.STARTING_Q_PER_MARKET;
     }
     function upgradeShares(id) {
-        if (isIPO(id)) return false;
         const s = State.get();
         const mk = s.markets[id];
         const cost = shareUpgradeCost(id);
@@ -403,7 +248,6 @@ export const Market = (() => {
     /* ---- trading ---- */
 
     function buyUnits(id, n, t, priceOverride = null) {
-        if (isIPO(id)) return { bought: 0, cost: 0, reason: "ipoed" };
         const s = State.get();
         const mk = s.markets[id];
         n = Math.min(n, mk.shares - mk.holding);
@@ -421,7 +265,6 @@ export const Market = (() => {
     }
 
     function sellUnits(id, n, t, priceOverride = null) {
-        if (isIPO(id)) return { sold: 0, gain: 0, profit: 0, reason: "ipoed" };
         const s = State.get();
         const mk = s.markets[id];
         n = Math.min(n, mk.holding);
@@ -454,11 +297,10 @@ export const Market = (() => {
 
     function cashOutValue(id) {
         const mk = State.get().markets[id];
-        return mk.pool * portfolioBoostMult() * (1 + mk.milestoneBonus);
+        return mk.pool * portfolioBoostMult();
     }
 
     function canCashOut(id) {
-        if (isIPO(id)) return { ok: false, reason: "ipoed" };
         const mk = State.get().markets[id];
         if (mk.cashOutCooldown > 0) {
             const cap = poolMax(id);
@@ -484,26 +326,17 @@ export const Market = (() => {
         return { ok: true, pct: cap > 0 ? (mk.pool / cap) * 100 : 100 };
     }
 
-    function nextMilestoneProgress(id) {
-        const mk = State.get().markets[id];
-        const inCycle = mk.cashOutCount % Config.MILESTONE_EVERY;
-        return {
-            current: inCycle,
-            required: Config.MILESTONE_EVERY,
-            toNext: Config.MILESTONE_EVERY - inCycle
-        };
-    }
-
     function cashOut(id) {
         const check = canCashOut(id);
         if (!check.ok) return { ok: false, reason: check.reason };
         const s = State.get();
         const mk = s.markets[id];
         const value = cashOutValue(id);
+        const tip = value * Config.LEVEL_TIP_PCT;
         const qBefore = s.Q;
 
-        s.Q += value;
-        s.total += value;
+        s.Q += value + tip;
+        s.total += value + tip;
         mk.lastCashOut = Date.now();
         mk.cashOutCooldown = Config.CASHOUT_COOLDOWN;
         mk.lifetimeCashOut += value;
@@ -516,28 +349,31 @@ export const Market = (() => {
             s.bestCashOut = value;
         }
 
-        let milestoneBonusQ = 0;
-        let milestoneHit = false;
-        if (mk.cashOutCount % Config.MILESTONE_EVERY === 0) {
-            milestoneBonusQ = value * Config.MILESTONE_BONUS_MULT;
-            s.Q += milestoneBonusQ;
-            s.total += milestoneBonusQ;
-            mk.milestoneBonus = Math.min(
-                Config.MILESTONE_PERM_CAP,
-                mk.milestoneBonus + Config.MILESTONE_PERM_BONUS
-            );
-            milestoneHit = true;
+        /* Level-up check */
+        const prevLevel = mk.level || 0;
+        const newLevel = Config.computeLevel(mk.cashOutCount);
+        let levelUp = false;
+        let bonusGained = 0;
+        if (newLevel > prevLevel) {
+            mk.level = newLevel;
+            mk.lastLevelUpTime = Date.now();
+            levelUp = true;
+            for (let n = prevLevel + 1; n <= newLevel; n++) {
+                bonusGained += Config.bonusAtLevel(n);
+            }
         }
+
         if (qBefore > 1) {
-            s.lastGrowthPct = ((value + milestoneBonusQ) / qBefore) * 100;
+            s.lastGrowthPct = ((value + tip) / qBefore) * 100;
         }
         return {
             ok: true,
             value,
-            milestoneHit,
-            milestoneBonusQ,
-            newMilestoneBonus: mk.milestoneBonus,
-            cashOutCount: mk.cashOutCount
+            tip,
+            cashOutCount: mk.cashOutCount,
+            levelUp,
+            newLevel: mk.level || 0,
+            bonusGained
         };
     }
 
@@ -548,7 +384,6 @@ export const Market = (() => {
     }
 
     function canReset(id) {
-        if (isIPO(id)) return { ok: false, reason: "ipoed" };
         const mk = State.get().markets[id];
         if (mk.resetCooldown > 0)
             return { ok: false, reason: "cooldown", left: mk.resetCooldown };
@@ -624,8 +459,10 @@ export const Market = (() => {
         const lv = State.get().poolBuffer || 0;
         return Config.POOL_BUFFER_BASE * Math.pow(Config.POOL_BUFFER_MULT, lv);
     }
+
     function upgradePoolBuffer() {
         const s = State.get();
+        if (s.poolBuffer >= Config.POOL_BUFFER_MAX_LEVEL) return false;
         const cost = poolBufferCost();
         if (s.Q < cost) return false;
         s.Q -= cost;
@@ -648,8 +485,6 @@ export const Market = (() => {
         return true;
     }
 
-    /* ---- reaction (wave damping) ---- */
-
     function reactionCost() {
         const lv = State.get().reaction || 0;
         return Config.REACTION_BASE * Math.pow(Config.REACTION_MULT, lv);
@@ -665,13 +500,6 @@ export const Market = (() => {
     }
 
     /* ---- aggregates ---- */
-
-    function totalShares() {
-        let sum = 0;
-        for (const m of Config.liveMarkets())
-            sum += State.get().markets[m.id].shares;
-        return sum;
-    }
     function totalLifetimeCashOut() {
         let sum = 0;
         for (const m of Config.liveMarkets())
@@ -690,11 +518,6 @@ export const Market = (() => {
             sum += State.get().markets[m.id].cashOutCount;
         return sum;
     }
-    function ipoedCount() {
-        let n = 0;
-        for (const m of Config.liveMarkets()) if (isIPO(m.id)) n += 1;
-        return n;
-    }
 
     /* ---- tick ---- */
 
@@ -702,14 +525,13 @@ export const Market = (() => {
         const s = State.get();
         const now = nowOverride ?? Date.now();
 
-        const passiveIn = ipoPassiveTotal() + passiveYieldRate();
+        const passiveIn = levelPassiveTotal() + passiveYieldRate();
         if (passiveIn > 0) {
             s.Q += passiveIn * dt;
             s.total += passiveIn * dt;
         }
 
         for (const m of Config.MARKETS) {
-            if (isIPO(m.id)) continue;
             const mk = s.markets[m.id];
             if (mk.cashOutCooldown > 0)
                 mk.cashOutCooldown = Math.max(0, mk.cashOutCooldown - dt);
@@ -739,15 +561,14 @@ export const Market = (() => {
         marketBasePrice,
         naturalPrice,
         movingAverage,
+        buyPrice,
+        sellPrice,
         periodMultOf,
         noiseMultOf,
         waveAmpMult,
         signalMult,
-        starsOf,
-        waveDiffOf,
-        nextIpoThreshold,
-        buyPrice,
-        sellPrice,
+        isUnlocked,
+
         marketMultiplier,
         shareMult,
         portfolioBoostMult,
@@ -755,34 +576,29 @@ export const Market = (() => {
         poolBufferMult,
         poolMax,
         currentInterestRate,
-        totalInterestRate,
-        isUnlocked,
-        isIPO,
-        canIPO,
-        ipoPassiveRate,
-        ipoLumpSum,
-        ipoMarket,
-        ipoPassiveTotal,
-        canReopen,
-        reopenMarket,
-        projectedIpoPassive,
-        projectedIpoLump,
-        ipoProgress,
-        canRollback,
-        rollbackMarket,
+        /* level */
+        levelOf,
+        levelProgress,
+        levelPassiveRate,
+        levelPassiveTotal,
+        totalLevels,
         passiveYieldRate,
+        /* shares */
         shareUpgradeCost,
         shareUpgradeRequirement,
         upgradeShares,
+        /* trading */
         buyUnits,
         sellUnits,
+        /* cash out */
         cashOutValue,
         canCashOut,
-        nextMilestoneProgress,
         cashOut,
+        /* reset */
         resetAmount,
         canReset,
         resetMarket,
+        /* upgrades */
         portfolioBoostCost,
         upgradePortfolio,
         interestBoosterCost,
@@ -795,11 +611,10 @@ export const Market = (() => {
         upgradePassiveYield,
         reactionCost,
         upgradeReaction,
-        totalShares,
+        /* aggregates */
         totalLifetimeCashOut,
         totalLifetimeProfit,
         totalCashOuts,
-        ipoedCount,
         tick
     };
 })();

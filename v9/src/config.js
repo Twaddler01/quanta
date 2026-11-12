@@ -1,6 +1,43 @@
 export const Config = (() => {
     const DEBUG_MODE = false;
 
+    /* ---- level curve constants ---- */
+    const LEVEL_BASE_STEP = 10; // cash-outs for L1
+    const LEVEL_ADD = 2; // step increment per level
+    const LEVEL_QUAD = 1; // extra quadratic growth per level
+    const LEVEL_BONUS_BASE = 0.6; // Q/s at L1, scaled by L^exp
+    const LEVEL_BONUS_EXP = 0.9;
+    const LEVEL_TIP_PCT = 0.05; // per-cash-out lump tip = value × this
+
+    function levelStepAt(n) {
+        if (n <= 0) return 0;
+        return (
+            LEVEL_BASE_STEP +
+            LEVEL_ADD * (n - 1) +
+            (LEVEL_QUAD * (n - 1) * (n - 2)) / 2
+        );
+    }
+    function levelThreshold(L) {
+        let sum = 0;
+        for (let n = 1; n <= L; n++) sum += levelStepAt(n);
+        return sum;
+    }
+    function computeLevel(cashOuts) {
+        if (cashOuts <= 0) return 0;
+        let L = 0;
+        while (levelThreshold(L + 1) <= cashOuts && L < 1000) L++;
+        return L;
+    }
+    function bonusAtLevel(n) {
+        if (n <= 0) return 0;
+        return LEVEL_BONUS_BASE * Math.pow(n, LEVEL_BONUS_EXP);
+    }
+    function totalLevelBonus(L) {
+        let sum = 0;
+        for (let n = 1; n <= L; n++) sum += bonusAtLevel(n);
+        return sum;
+    }
+
     const BASE_MARKETS = [
         {
             id: "calm",
@@ -15,7 +52,7 @@ export const Config = (() => {
                 amp2: 0.08,
                 period2: 20,
                 noiseAmp: 0.02,
-                periodMult: 3
+                periodMult: 1.5
             }
         },
         {
@@ -35,8 +72,7 @@ export const Config = (() => {
                 amp3: 0.06,
                 period3: 0.94,
                 noiseAmp: 0.015,
-                periodMult: 1.0,
-                periodMultFloor: 0.85
+                periodMult: 1.0
             }
         },
         {
@@ -163,18 +199,13 @@ export const Config = (() => {
         SHARE_UPGRADE_BASE: 100,
         SHARE_UPGRADE_MULT: 1.2,
 
-        POOL_MAX_BASE: 500,
+        POOL_MAX_BASE: 350,
         SHARE_POOL_BONUS: 0.15,
-        POOL_ROUTE: 0.5,
+        POOL_ROUTE: 0.8,
         INTEREST_COEF: 0.02,
         INTEREST_WINDOW_SEC: 60,
         CASHOUT_FULL_THRESHOLD: 1,
         CASHOUT_COOLDOWN: 5,
-
-        MILESTONE_EVERY: 10,
-        MILESTONE_BONUS_MULT: 3,
-        MILESTONE_PERM_BONUS: 0.02,
-        MILESTONE_PERM_CAP: 0.5,
 
         RESET_COOLDOWN: 60,
         RESET_THRESHOLD_Q: 50,
@@ -191,28 +222,34 @@ export const Config = (() => {
         MARKET_LEVERAGE_MAX_LEVEL: 10,
         POOL_BUFFER_BASE: 10000,
         POOL_BUFFER_MULT: 2.5,
-        POOL_BUFFER_PER_LEVEL: 0.1,
+        POOL_BUFFER_PER_LEVEL: 0.05,
+        POOL_BUFFER_MAX_LEVEL: 10,
+
         PASSIVE_YIELD_BASE: 20000,
         PASSIVE_YIELD_MULT: 2.5,
         PASSIVE_YIELD_PER_LEVEL: 0.01,
         PASSIVE_YIELD_LIFETIME_DIV: 10000,
 
-        /* ---- Reaction (wave damping: reduces noise + fast ripple) ---- */
+        /* ---- Reaction (wave damping) ---- */
         REACTION_BASE: 2500,
         REACTION_MULT: 2.5,
         REACTION_PER_LEVEL: 0.05,
         REACTION_MAX_LEVEL: 10,
 
-        /* ---- IPO system ---- */
-        IPO_MIN_LIFETIME: 100000,
-        IPO_PASSIVE_PER_TIER: 1.0,
-        IPO_LUMP_MULT: 0.5,
-        IPO_MAX_STARS: 5,
+        /* ---- level helpers ---- */
+        LEVEL_BASE_STEP,
+        LEVEL_ADD,
+        LEVEL_QUAD,
+        LEVEL_BONUS_BASE,
+        LEVEL_BONUS_EXP,
+        LEVEL_TIP_PCT,
+        levelStepAt,
+        levelThreshold,
+        computeLevel,
+        bonusAtLevel,
+        totalLevelBonus,
 
-        STAR_NOISE_PER: 0.35,
-        STAR_PERIOD_PER: 0.08,
-
-        SAVE_KEY: "quanta_portfolio_v7"
+        SAVE_KEY: "quanta_portfolio_v9"
     };
 })();
 
@@ -226,7 +263,8 @@ export const State = (() => {
             lifetimeProfit: 0,
             lifetimeCashOut: 0,
             cashOutCount: 0,
-            milestoneBonus: 0,
+            level: 0,
+            lastLevelUpTime: 0,
             pool: 0,
             recentProfit: 0,
             interestExpiresAt: 0,
@@ -249,13 +287,7 @@ export const State = (() => {
 
     function blank() {
         const markets = {};
-        const stars = {};
-        const ipoed = {};
-        for (const m of Config.MARKETS) {
-            markets[m.id] = blankMarket();
-            stars[m.id] = 0;
-            ipoed[m.id] = false;
-        }
+        for (const m of Config.MARKETS) markets[m.id] = blankMarket();
         return {
             Q: Config.STARTING_Q,
             total: Config.STARTING_Q,
@@ -267,8 +299,6 @@ export const State = (() => {
             poolBuffer: 0,
             passiveYield: 0,
             reaction: 0,
-            stars,
-            ipoed,
             activeMarket: "calm",
             seenMarkets: blankSeenMarkets(),
             start: Date.now(),
@@ -322,6 +352,10 @@ export const Save = (() => {
         const markets = {};
         for (const m of Config.MARKETS) {
             const saved = p.markets?.[m.id] || {};
+            const cashOutCount = Math.max(
+                0,
+                Math.floor(num(saved.cashOutCount))
+            );
             markets[m.id] = {
                 q: num(saved.q) || def.markets[m.id].q,
                 shares: Math.max(
@@ -332,11 +366,10 @@ export const Save = (() => {
                 costBasis: num(saved.costBasis),
                 lifetimeProfit: num(saved.lifetimeProfit),
                 lifetimeCashOut: num(saved.lifetimeCashOut),
-                cashOutCount: Math.max(0, Math.floor(num(saved.cashOutCount))),
-                milestoneBonus: Math.min(
-                    Config.MILESTONE_PERM_CAP,
-                    Math.max(0, num(saved.milestoneBonus))
-                ),
+                cashOutCount,
+                /* derive level from cash-out count — migration-safe */
+                level: Config.computeLevel(cashOutCount),
+                lastLevelUpTime: num(saved.lastLevelUpTime),
                 pool: Math.max(0, num(saved.pool)),
                 recentProfit: Math.max(0, num(saved.recentProfit)),
                 interestExpiresAt: Math.max(0, num(saved.interestExpiresAt)),
@@ -351,27 +384,6 @@ export const Save = (() => {
             };
         }
 
-        const legacyIpoed = p.ipoed || {};
-        const savedStars = p.stars || {};
-        const stars = {};
-        const ipoed = {};
-        for (const m of Config.MARKETS) {
-            if (savedStars[m.id] !== undefined) {
-                stars[m.id] = Math.max(
-                    0,
-                    Math.min(
-                        Config.IPO_MAX_STARS,
-                        Math.floor(num(savedStars[m.id]))
-                    )
-                );
-            } else if (legacyIpoed[m.id] === true) {
-                stars[m.id] = 1;
-            } else {
-                stars[m.id] = 0;
-            }
-            ipoed[m.id] = legacyIpoed[m.id] === true;
-        }
-
         State.replace({
             Q: num(p.Q) || def.Q,
             total: num(p.total) || def.total,
@@ -380,14 +392,18 @@ export const Save = (() => {
             portfolioBoost: Math.max(0, Math.floor(num(p.portfolioBoost))),
             interestBooster: Math.max(0, Math.floor(num(p.interestBooster))),
             marketLeverage: Math.max(0, Math.floor(num(p.marketLeverage))),
-            poolBuffer: Math.max(0, Math.floor(num(p.poolBuffer))),
+            poolBuffer: Math.max(
+                0,
+                Math.min(
+                    Config.POOL_BUFFER_MAX_LEVEL,
+                    Math.floor(num(p.poolBuffer))
+                )
+            ),
             passiveYield: Math.max(0, Math.floor(num(p.passiveYield))),
             reaction: Math.max(
                 0,
                 Math.min(Config.REACTION_MAX_LEVEL, Math.floor(num(p.reaction)))
             ),
-            stars,
-            ipoed,
             activeMarket: Config.MARKETS.some(m => m.id === p.activeMarket)
                 ? p.activeMarket
                 : "calm",
