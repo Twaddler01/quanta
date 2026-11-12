@@ -32,6 +32,12 @@ export const Market = (() => {
         const lv = State.get().reaction || 0;
         return Math.max(0.3, 1 - lv * Config.REACTION_PER_LEVEL);
     }
+    
+    /* Broker License: reduces the trading fee globally. */
+    function brokerFee() {
+        const lv = State.get().brokerLicense || 0;
+        return Math.max(0, Config.TRADING_FEE - lv * Config.BROKER_PER_LEVEL);
+    }
 
     /* Frequency Coil: scales the wave tempo for one market. */
     function marketSpeedMult(id) {
@@ -110,7 +116,7 @@ export const Market = (() => {
         return sum / N;
     }
 
-    const buyPrice = (id, t) => naturalPrice(id, t) * (1 + Config.TRADING_FEE);
+    const buyPrice = (id, t) => naturalPrice(id, t) * (1 + brokerFee());
     const sellPrice = id => t => naturalPrice(id, t);
 
     /* ---- multipliers ---- */
@@ -533,6 +539,27 @@ export const Market = (() => {
         return true;
     }
 
+    /* ---- broker license ---- */
+    
+    function brokerCost() {
+        const lv = State.get().brokerLicense || 0;
+        return Config.BROKER_BASE * Math.pow(Config.BROKER_MULT, lv);
+    }
+    function canUpgradeBroker() {
+        const s = State.get();
+        if ((s.brokerLicense || 0) >= Config.BROKER_MAX_LEVEL) return false;
+        return s.Q >= brokerCost();
+    }
+    function upgradeBroker() {
+        const s = State.get();
+        if ((s.brokerLicense || 0) >= Config.BROKER_MAX_LEVEL) return false;
+        const cost = brokerCost();
+        if (s.Q < cost) return false;
+        s.Q -= cost;
+        s.brokerLicense = (s.brokerLicense || 0) + 1;
+        return true;
+    }
+
     /* ---- aggregates ---- */
     function totalLifetimeCashOut() {
         let sum = 0;
@@ -602,6 +629,7 @@ export const Market = (() => {
         waveAmpMult,
         signalMult,
         marketSpeedMult,
+        brokerFee,
         isUnlocked,
 
         marketMultiplier,
@@ -650,6 +678,9 @@ export const Market = (() => {
         upgradePassiveYield,
         reactionCost,
         upgradeReaction,
+        brokerCost,
+        canUpgradeBroker,
+        upgradeBroker,
         /* aggregates */
         totalLifetimeCashOut,
         totalLifetimeProfit,

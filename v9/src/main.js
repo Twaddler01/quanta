@@ -31,6 +31,7 @@ window.QUANTA = {
             levelPassive: Market.levelPassiveTotal(),
             passiveYield: Market.passiveYieldRate(),
             reaction: s.reaction,
+            brokerLicense: s.brokerLicense || 0,
             signalMult: Market.signalMult(),
             totalLevels: Market.totalLevels(),
             markets: Config.MARKETS.map(m => ({

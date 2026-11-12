@@ -133,6 +133,24 @@ export const Game = (() => {
         }
     }
 
+    function upgradeBroker() {
+        const wasMax =
+            (State.get().brokerLicense || 0) >= Config.BROKER_MAX_LEVEL;
+        if (wasMax) {
+            UI.toast("Broker License maxed");
+            return;
+        }
+        if (Market.upgradeBroker()) {
+            UI.toast(
+                "Broker License leveled up · fee " +
+                    Math.round(Market.brokerFee() * 100) +
+                    "%"
+            );
+            Save.write();
+            UI.render();
+        }
+    }
+    
     function upgradeSpeed(id) {
         const wasMax =
             (State.get().markets[id]?.speedLevel || 0) >=
@@ -224,6 +242,7 @@ export const Game = (() => {
             upgradePassiveYield,
             upgradeReaction,
             upgradeSpeed,
+            upgradeBroker,
             resetMarket,
             selectMarket,
             reset

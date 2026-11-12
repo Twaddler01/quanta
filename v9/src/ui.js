@@ -344,6 +344,22 @@ export const UI = (() => {
             ]
         );
 
+        const brokerBtn = el(
+            "button",
+            {
+                className: "upgrade-btn",
+                id: "brokerBtn",
+                onClick: () => {
+                    actions.upgradeBroker();
+                }
+            },
+            [
+                div({ className: "upg-title" }, "Broker License"),
+                div({ className: "upg-desc", id: "brokerDesc" }, "—"),
+                div({ className: "upg-cost", id: "brokerCost" }, "—")
+            ]
+        );
+
         const portfolioPanel = el("div", { className: "panel" }, [
             el("div", { className: "panel-title" }, "Portfolio"),
             contributionRows,
@@ -354,7 +370,8 @@ export const UI = (() => {
             leverageBtn,
             bufferBtn,
             yieldBtn,
-            reactionBtn
+            reactionBtn,
+            brokerBtn
         ]);
 
         const profileRows = el("div", { className: "stat-block" }, [
@@ -410,6 +427,8 @@ export const UI = (() => {
         upgradePoolBuffer: () => {},
         upgradePassiveYield: () => {},
         upgradeReaction: () => {},
+        upgradeSpeed: () => {},
+        upgradeBroker: () => {},
         resetMarket: () => {},
         selectMarket: () => {},
         reset: () => {}
@@ -478,7 +497,7 @@ export const UI = (() => {
         const mk = s.markets[id];
         const mDef = Market.def(id);
         const now = Date.now() / 1000;
-    
+
         const SPAN = (mDef.chartSpan ?? 20) / Market.marketSpeedMult(id);
         const N = 80;
         const pad = 8;
@@ -899,7 +918,7 @@ export const UI = (() => {
         const canSpeed = !spMaxed && s.Q >= spCost;
         $("#upgradeSpeedBtn").classList.toggle("can", canSpeed);
         $("#upgradeSpeedBtn").classList.toggle("poor", !canSpeed);
-        
+
         drawChart();
         renderPortfolioAndProfile();
     }
@@ -1022,7 +1041,11 @@ export const UI = (() => {
             1 - (s.poolBuffer + 1) * Config.POOL_BUFFER_PER_LEVEL
         );
         $("#bufferDesc").textContent = pbMaxed
-            ? "LV " + s.poolBuffer + " · MAXED (pool cap ×" + pbNow.toFixed(2) + ")"
+            ? "LV " +
+              s.poolBuffer +
+              " · MAXED (pool cap ×" +
+              pbNow.toFixed(2) +
+              ")"
             : "LV " +
               s.poolBuffer +
               " · pool cap ×" +
@@ -1067,6 +1090,25 @@ export const UI = (() => {
             : Format.num(rCost) + " Q";
         $("#reactionBtn").classList.toggle("can", !rMaxed && s.Q >= rCost);
         $("#reactionBtn").classList.toggle("poor", rMaxed || s.Q < rCost);
+
+        const bkCost = Market.brokerCost();
+        const bkMaxed = (s.brokerLicense || 0) >= Config.BROKER_MAX_LEVEL;
+        const bkNow = Market.brokerFee();
+        const bkNext = Math.max(0, bkNow - Config.BROKER_PER_LEVEL);
+        $("#brokerDesc").textContent = bkMaxed
+            ? "LV " + s.brokerLicense + " · MAXED (fee 0%)"
+            : "LV " +
+              s.brokerLicense +
+              " · fee " +
+              (bkNow * 100).toFixed(1) +
+              "% → " +
+              (bkNext * 100).toFixed(1) +
+              "%";
+        $("#brokerCost").textContent = bkMaxed
+            ? "MAX"
+            : Format.num(bkCost) + " Q";
+        $("#brokerBtn").classList.toggle("can", !bkMaxed && s.Q >= bkCost);
+        $("#brokerBtn").classList.toggle("poor", bkMaxed || s.Q < bkCost);
 
         /* Profile */
         $("#profileEarned").textContent = Format.num(s.total) + " Q";

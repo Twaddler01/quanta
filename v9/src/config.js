@@ -2,19 +2,19 @@ export const Config = (() => {
     const DEBUG_MODE = false;
 
     /* ---- level curve constants ---- */
-    const LEVEL_BASE_STEP = 10; // cash-outs for L1
-    const LEVEL_ADD = 2; // step increment per level
-    const LEVEL_QUAD = 1; // extra quadratic growth per level
+    const LEVEL_BASE_STEP = 6;    // cash-outs for L1
+    const LEVEL_ADD = 3;          // step increment per level
+    const LEVEL_QUAD = 0.5;       // extra quadratic growth per level
     const LEVEL_BONUS_BASE = 0.6; // Q/s at L1, scaled by L^exp
     const LEVEL_BONUS_EXP = 0.9;
     const LEVEL_TIP_PCT = 0.05; // per-cash-out lump tip = value × this
 
     function levelStepAt(n) {
         if (n <= 0) return 0;
-        return (
+        return Math.floor(
             LEVEL_BASE_STEP +
-            LEVEL_ADD * (n - 1) +
-            (LEVEL_QUAD * (n - 1) * (n - 2)) / 2
+                LEVEL_ADD * (n - 1) +
+                (LEVEL_QUAD * (n - 1) * (n - 2)) / 2
         );
     }
     function levelThreshold(L) {
@@ -39,17 +39,16 @@ export const Config = (() => {
     }
 
     const BASE_MARKETS = [
-        // before
         {
             id: "calm",
             name: "Calm Waters",
-            tierWeight: 1.0,
-            priceMult: 1.0,
+            tierWeight: 1.2,
+            priceMult: 1.2,
             threshold: 1000,
             unlockAt: 0,
             wave: {
                 amp1: 0.2,
-                period1: 40,
+                period1: 25,
                 amp2: 0.08,
                 period2: 20,
                 noiseAmp: 0.02,
@@ -76,12 +75,11 @@ export const Config = (() => {
                 periodMult: 1.0
             }
         },
-        // after
         {
             id: "tidal",
             name: "Turbulent Tides",
-            tierWeight: 1.5,
-            priceMult: 1.5,
+            tierWeight: 1.8,
+            priceMult: 1.8,
             threshold: 2000,
             unlockAt: 5000,
             wave: {
@@ -212,32 +210,38 @@ export const Config = (() => {
         RESET_COOLDOWN: 60,
         RESET_THRESHOLD_Q: 50,
 
-        PORTFOLIO_BOOST_BASE: 3000,
+        PORTFOLIO_BOOST_BASE: 1800,
         PORTFOLIO_BOOST_MULT: 2.5,
         PORTFOLIO_BOOST_PER_LEVEL: 0.15,
-        INTEREST_BOOSTER_BASE: 5000,
+        INTEREST_BOOSTER_BASE: 3000,
         INTEREST_BOOSTER_MULT: 2.5,
         INTEREST_BOOSTER_PER_LEVEL: 0.15,
-        MARKET_LEVERAGE_BASE: 15000,
+        MARKET_LEVERAGE_BASE: 9000,
         MARKET_LEVERAGE_MULT: 3.0,
         MARKET_LEVERAGE_PER_LEVEL: 0.05,
         MARKET_LEVERAGE_MAX_LEVEL: 10,
-        POOL_BUFFER_BASE: 10000,
+        POOL_BUFFER_BASE: 6000,
         POOL_BUFFER_MULT: 2.5,
         POOL_BUFFER_PER_LEVEL: 0.05,
         POOL_BUFFER_MAX_LEVEL: 10,
 
-        PASSIVE_YIELD_BASE: 20000,
+        PASSIVE_YIELD_BASE: 12000,
         PASSIVE_YIELD_MULT: 2.5,
         PASSIVE_YIELD_PER_LEVEL: 0.01,
         PASSIVE_YIELD_LIFETIME_DIV: 10000,
 
         /* ---- Reaction (wave damping) ---- */
-        REACTION_BASE: 2500,
+        REACTION_BASE: 1500,
         REACTION_MULT: 2.5,
         REACTION_PER_LEVEL: 0.05,
         REACTION_MAX_LEVEL: 10,
         
+        /* ---- Broker License (trading fee reduction) ---- */
+        BROKER_BASE: 2000,
+        BROKER_MULT: 2.5,
+        BROKER_PER_LEVEL: 0.01,
+        BROKER_MAX_LEVEL: 10,
+
         /* ---- Frequency Coil (wave speed) ---- */
         SPEED_UPGRADE_BASE: 3000,
         SPEED_UPGRADE_MULT: 2.5,
@@ -308,6 +312,7 @@ export const State = (() => {
             poolBuffer: 0,
             passiveYield: 0,
             reaction: 0,
+            brokerLicense: 0,
             activeMarket: "calm",
             seenMarkets: blankSeenMarkets(),
             start: Date.now(),
@@ -419,6 +424,10 @@ export const Save = (() => {
             reaction: Math.max(
                 0,
                 Math.min(Config.REACTION_MAX_LEVEL, Math.floor(num(p.reaction)))
+            ),
+            brokerLicense: Math.max(
+                0,
+                Math.min(Config.BROKER_MAX_LEVEL, Math.floor(num(p.brokerLicense)))
             ),
             activeMarket: Config.MARKETS.some(m => m.id === p.activeMarket)
                 ? p.activeMarket
