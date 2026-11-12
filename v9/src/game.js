@@ -181,6 +181,7 @@ export const Game = (() => {
     function selectMarket(id) {
         if (!Market.isUnlocked(id)) return;
         const s = State.get();
+        if (s.activeMarket !== id) Market.resetStreak(s.activeMarket);
         s.activeMarket = id;
         s.seenMarkets[id] = true;
         Save.write();

@@ -32,7 +32,25 @@ export const Market = (() => {
         const lv = State.get().reaction || 0;
         return Math.max(0.3, 1 - lv * Config.REACTION_PER_LEVEL);
     }
-    
+
+    /* Streak: consecutive profitable trades within a time window. */
+    function streakBonus(id) {
+        const mk = State.get().markets[id];
+        const s = mk?.streak || 0;
+        return Math.min(Config.STREAK_CAP, s * Config.STREAK_PER);
+    }
+    function resetStreak(id) {
+        const mk = State.get().markets[id];
+        if (mk) mk.streak = 0;
+    }
+
+    function streakTimeLeftMs(id) {
+        const mk = State.get().markets[id];
+        if (!mk || !(mk.streak > 0) || !mk.lastStreakAt) return 0;
+        const elapsed = Date.now() - mk.lastStreakAt;
+        return Math.max(0, Config.STREAK_WINDOW_MS - elapsed);
+    }
+
     /* Broker License: reduces the trading fee globally. */
     function brokerFee() {
         const lv = State.get().brokerLicense || 0;
@@ -78,42 +96,6 @@ export const Market = (() => {
             Math.sin(tn * 8.3 + phase * 1.7) * nAmp * 0.4;
 
         return Math.max(base * 0.1, base * (1 + weather + noise));
-    }
-
-    function movingAverage(id, t) {
-        const N = 60,
-            SPAN = 300;
-        const w = waveOf(id);
-        const base = marketBasePrice(id);
-        const phase = State.get().noisePhase;
-        const pm = periodMultOf(id);
-        const nm = noiseMultOf(id);
-        const ampBoost = waveAmpMult();
-        const damp = signalMult();
-        const nAmp = w.noiseAmp * damp;
-        let sum = 0;
-        for (let i = 0; i < N; i++) {
-            const tt = t - SPAN + (i / N) * SPAN;
-            const tp = tt * pm;
-            let weather =
-                Math.sin((tp / w.period1) * Math.PI * 2) * w.amp1 * ampBoost +
-                Math.sin((tp / w.period2) * Math.PI * 2 + 0.7) *
-                    w.amp2 *
-                    ampBoost;
-            if (w.amp3 != null && w.period3) {
-                weather +=
-                    Math.sin((tp / w.period3) * Math.PI * 2 + 2.1) *
-                    w.amp3 *
-                    ampBoost *
-                    damp;
-            }
-            const tn = tt * nm;
-            const noise =
-                Math.sin(tn * 3.7 + phase) * nAmp * 0.6 +
-                Math.sin(tn * 8.3 + phase * 1.7) * nAmp * 0.4;
-            sum += base * (1 + weather + noise);
-        }
-        return sum / N;
     }
 
     const buyPrice = (id, t) => naturalPrice(id, t) * (1 + brokerFee());
@@ -326,6 +308,16 @@ export const Market = (() => {
             mk.recentProfit = profit;
             mk.interestExpiresAt =
                 Date.now() + Config.INTEREST_WINDOW_SEC * 1000;
+        
+            /* streak update */
+            const nowMs = Date.now();
+            const withinWindow =
+                (mk.streak || 0) > 0 &&
+                nowMs - (mk.lastStreakAt || 0) < Config.STREAK_WINDOW_MS;
+            mk.streak = withinWindow ? (mk.streak || 0) + 1 : 1;
+            mk.lastStreakAt = nowMs;
+        } else if (profit < 0) {
+            mk.streak = 0;
         }
         mk.lastSellProfit = profit;
         mk.lastSellTotal = gain;
@@ -337,7 +329,9 @@ export const Market = (() => {
 
     function cashOutValue(id) {
         const mk = State.get().markets[id];
-        return mk.pool * portfolioBoostMult();
+        return (
+            mk.pool * portfolioBoostMult() * (1 + streakBonus(id))
+        );
     }
 
     function canCashOut(id) {
@@ -540,7 +534,7 @@ export const Market = (() => {
     }
 
     /* ---- broker license ---- */
-    
+
     function brokerCost() {
         const lv = State.get().brokerLicense || 0;
         return Config.BROKER_BASE * Math.pow(Config.BROKER_MULT, lv);
@@ -598,6 +592,12 @@ export const Market = (() => {
                 mk.cashOutCooldown = Math.max(0, mk.cashOutCooldown - dt);
             if (mk.resetCooldown > 0)
                 mk.resetCooldown = Math.max(0, mk.resetCooldown - dt);
+            if (
+                (mk.streak || 0) > 0 &&
+                now - (mk.lastStreakAt || 0) > Config.STREAK_WINDOW_MS
+            ) {
+                mk.streak = 0;
+            }
             if (mk.interestExpiresAt > now && mk.recentProfit > 0) {
                 const tLeft =
                     (mk.interestExpiresAt - now) /
@@ -621,7 +621,6 @@ export const Market = (() => {
         basePrice,
         marketBasePrice,
         naturalPrice,
-        movingAverage,
         buyPrice,
         sellPrice,
         periodMultOf,
@@ -630,6 +629,9 @@ export const Market = (() => {
         signalMult,
         marketSpeedMult,
         brokerFee,
+        streakBonus,
+        resetStreak,
+        streakTimeLeftMs,
         isUnlocked,
 
         marketMultiplier,

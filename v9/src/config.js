@@ -248,6 +248,11 @@ export const Config = (() => {
         SPEED_PER_LEVEL: 0.15,
         SPEED_MAX_LEVEL: 10,
 
+        /* ---- Streak (consecutive profitable trades per market) ---- */
+        STREAK_WINDOW_MS: 15000,
+        STREAK_PER: 0.02,
+        STREAK_CAP: 0.5,
+
         /* ---- level helpers ---- */
         LEVEL_BASE_STEP,
         LEVEL_ADD,
@@ -288,7 +293,9 @@ export const State = (() => {
             lastCashOut: 0,
             cashOutCooldown: 0,
             resetCooldown: 0,
-            speedLevel: 0
+            speedLevel: 0,
+            streak: 0,
+            lastStreakAt: 0
         };
     }
 
@@ -401,7 +408,9 @@ export const Save = (() => {
                         Config.SPEED_MAX_LEVEL,
                         Math.floor(num(saved.speedLevel))
                     )
-                )
+                ),
+                streak: Math.max(0, Math.floor(num(saved.streak))),
+                lastStreakAt: Math.max(0, num(saved.lastStreakAt))
             };
         }
 

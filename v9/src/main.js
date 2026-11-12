@@ -43,7 +43,9 @@ window.QUANTA = {
                 cashOuts: s.markets[m.id].cashOutCount,
                 level: s.markets[m.id].level || 0,
                 speedLevel: s.markets[m.id].speedLevel || 0,
-                levelPassive: Market.levelPassiveRate(m.id)
+                streak: s.markets[m.id].streak || 0,
+                streakTimeLeftMs: Market.streakTimeLeftMs(m.id),
+                levelPassive: Market.levelPassiveRate
             }))
         };
     },
@@ -111,6 +113,19 @@ window.QUANTA = {
             mk.speedLevel +
             " · wave ×" +
             Market.marketSpeedMult(mid).toFixed(2)
+        );
+    },
+    setStreak: (id, n) => {
+        const mid = id || State.get().activeMarket;
+        const mk = State.get().markets[mid];
+        mk.streak = Math.max(0, n | 0);
+        mk.lastStreakAt = Date.now();
+        UI.render();
+        return (
+            "Streak: " +
+            mk.streak +
+            " · bonus ×" +
+            (1 + Market.streakBonus(mid)).toFixed(2)
         );
     },
     setCashOuts: (id, n) => {

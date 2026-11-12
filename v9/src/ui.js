@@ -86,10 +86,10 @@ export const UI = (() => {
                 row("Holding", "holdingRow"),
                 row("Cost", "costRow"),
                 row("P/L", "plRow"),
+                row("Streak", "streakRow"),
                 div({ className: "stat-sep" }),
                 row("Wallet", "walletRow"),
                 row("Current", "currentRow"),
-                row("MA (5m)", "maRow"),
                 div({ className: "stat-sep" }),
                 row("Last sell", "lastSellRow"),
                 row("Lifetime", "lifetimeRow")
@@ -513,9 +513,6 @@ export const UI = (() => {
             if (p < minP) minP = p;
             if (p > maxP) maxP = p;
         }
-        const ma = Market.movingAverage(id, now);
-        if (ma < minP) minP = ma;
-        if (ma > maxP) maxP = ma;
         const cur = Market.naturalPrice(id, now);
         if (cur < minP) minP = cur;
         if (cur > maxP) maxP = cur;
@@ -544,15 +541,6 @@ export const UI = (() => {
             ctx.lineWidth = 1.2;
             ctx.stroke();
             ctx.setLineDash([]);
-        }
-        if (ma >= minP && ma <= maxP) {
-            const y = yOf(ma);
-            ctx.beginPath();
-            ctx.moveTo(0, y);
-            ctx.lineTo(W, y);
-            ctx.strokeStyle = "rgba(96, 165, 250, 0.55)";
-            ctx.lineWidth = 1.5;
-            ctx.stroke();
         }
 
         const pts = samples.map((p, i) => [(i / N) * W, yOf(p)]);
@@ -708,7 +696,6 @@ export const UI = (() => {
         /* ============ Market stats ============ */
         const buyP = Market.buyPrice(id, t);
         const sellP = Market.sellPrice(id)(t);
-        const ma = Market.movingAverage(id, t);
         const curP = Market.naturalPrice(id, t);
 
         $("#holdingRow").textContent = mk.holding + "/" + mk.shares + " units";
@@ -739,19 +726,23 @@ export const UI = (() => {
             $("#plRow").style.color = "";
         }
 
+        /* streak row */
+        const streak = mk.streak || 0;
+        const streakMult = 1 + Market.streakBonus(id);
+        const streakMs = Market.streakTimeLeftMs(id);
+        const streakEl = $("#streakRow");
+        if (streak > 0 && streakMs > 0) {
+            const secs = Math.ceil(streakMs / 1000);
+            streakEl.textContent =
+                "×" + streakMult.toFixed(2) + " · " + secs + "s";
+            streakEl.style.color = "var(--good)";
+        } else {
+            streakEl.textContent = "—";
+            streakEl.style.color = "";
+        }
+
         $("#walletRow").textContent = Format.num(mk.q) + " q";
         $("#currentRow").textContent = "Ⓠ " + Format.num(curP);
-        const vsMa = ma > 0 ? ((curP - ma) / ma) * 100 : 0;
-        $("#maRow").textContent =
-            "Ⓠ " +
-            Format.num(ma) +
-            " · " +
-            (vsMa >= 0 ? "+" : "") +
-            vsMa.toFixed(1) +
-            "% " +
-            (vsMa >= 0 ? "over" : "under");
-        $("#maRow").style.color =
-            vsMa < -2 ? "var(--good)" : vsMa > 2 ? "var(--cost)" : "var(--txt)";
 
         if (mk.lastSellTime > 0) {
             const p = mk.lastSellProfit;
