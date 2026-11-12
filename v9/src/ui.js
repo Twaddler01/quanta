@@ -203,6 +203,22 @@ export const UI = (() => {
             ]
         );
 
+        const speedBtn = el(
+            "button",
+            {
+                className: "upgrade-btn",
+                id: "upgradeSpeedBtn",
+                onClick: () => {
+                    actions.upgradeSpeed(State.get().activeMarket);
+                }
+            },
+            [
+                div({ className: "upg-title" }, "Frequency Coil"),
+                div({ className: "upg-desc", id: "upgSpeedDesc" }, "—"),
+                div({ className: "upg-cost", id: "upgSpeedCost" }, "—")
+            ]
+        );
+
         const activePanel = el("div", { className: "panel market-panel" }, [
             activeTitle,
             activeSubtitle,
@@ -213,7 +229,8 @@ export const UI = (() => {
             cashOutBtn,
             resetMarketBtn,
             levelPanel,
-            upgradeBtn
+            upgradeBtn,
+            speedBtn
         ]);
 
         const contributionRows = el("div", {
@@ -385,6 +402,7 @@ export const UI = (() => {
         buy: () => {},
         sell: () => {},
         upgradeShares: () => {},
+        upgradeSpeed: () => {},
         cashOut: () => {},
         upgradePortfolio: () => {},
         upgradeInterestBooster: () => {},
@@ -460,8 +478,8 @@ export const UI = (() => {
         const mk = s.markets[id];
         const mDef = Market.def(id);
         const now = Date.now() / 1000;
-
-        const SPAN = mDef.chartSpan ?? 20;
+    
+        const SPAN = (mDef.chartSpan ?? 20) / Market.marketSpeedMult(id);
         const N = 80;
         const pad = 8;
         const ih = H - pad * 2;
@@ -861,6 +879,27 @@ export const UI = (() => {
         $("#upgradeShareBtn").classList.toggle("can", canUpgrade);
         $("#upgradeShareBtn").classList.toggle("poor", !canUpgrade);
 
+        /* frequency coil */
+        const spCost = Market.speedUpgradeCost(id);
+        const spLevel = mk.speedLevel || 0;
+        const spMaxed = spLevel >= Config.SPEED_MAX_LEVEL;
+        const spNow = Market.marketSpeedMult(id);
+        const spNext = 1 + (spLevel + 1) * Config.SPEED_PER_LEVEL;
+        $("#upgSpeedDesc").textContent = spMaxed
+            ? "LV " + spLevel + " · MAXED (wave ×" + spNow.toFixed(2) + ")"
+            : "LV " +
+              spLevel +
+              " · wave speed ×" +
+              spNow.toFixed(2) +
+              " → ×" +
+              spNext.toFixed(2);
+        $("#upgSpeedCost").textContent = spMaxed
+            ? "MAX"
+            : Format.num(spCost) + " Q";
+        const canSpeed = !spMaxed && s.Q >= spCost;
+        $("#upgradeSpeedBtn").classList.toggle("can", canSpeed);
+        $("#upgradeSpeedBtn").classList.toggle("poor", !canSpeed);
+        
         drawChart();
         renderPortfolioAndProfile();
     }

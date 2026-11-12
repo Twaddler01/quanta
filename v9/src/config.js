@@ -237,6 +237,12 @@ export const Config = (() => {
         REACTION_MULT: 2.5,
         REACTION_PER_LEVEL: 0.05,
         REACTION_MAX_LEVEL: 10,
+        
+        /* ---- Frequency Coil (wave speed) ---- */
+        SPEED_UPGRADE_BASE: 3000,
+        SPEED_UPGRADE_MULT: 2.5,
+        SPEED_PER_LEVEL: 0.15,
+        SPEED_MAX_LEVEL: 10,
 
         /* ---- level helpers ---- */
         LEVEL_BASE_STEP,
@@ -277,7 +283,8 @@ export const State = (() => {
             lastSellTime: 0,
             lastCashOut: 0,
             cashOutCooldown: 0,
-            resetCooldown: 0
+            resetCooldown: 0,
+            speedLevel: 0
         };
     }
 
@@ -382,7 +389,14 @@ export const Save = (() => {
                 lastSellTime: num(saved.lastSellTime),
                 lastCashOut: num(saved.lastCashOut),
                 cashOutCooldown: Math.max(0, num(saved.cashOutCooldown)),
-                resetCooldown: Math.max(0, num(saved.resetCooldown))
+                resetCooldown: Math.max(0, num(saved.resetCooldown)),
+                speedLevel: Math.max(
+                    0,
+                    Math.min(
+                        Config.SPEED_MAX_LEVEL,
+                        Math.floor(num(saved.speedLevel))
+                    )
+                )
             };
         }
 

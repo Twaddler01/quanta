@@ -133,6 +133,24 @@ export const Game = (() => {
         }
     }
 
+    function upgradeSpeed(id) {
+        const wasMax =
+            (State.get().markets[id]?.speedLevel || 0) >=
+            Config.SPEED_MAX_LEVEL;
+        if (wasMax) {
+            UI.toast("Frequency Coil maxed");
+            return;
+        }
+        if (Market.upgradeSpeed(id)) {
+            UI.toast(
+                "Frequency Coil leveled up · wave ×" +
+                    Market.marketSpeedMult(id).toFixed(2)
+            );
+            Save.write();
+            UI.render();
+        }
+    }
+
     function resetMarket(id) {
         const r = Market.resetMarket(id);
         if (r.ok) {
@@ -205,6 +223,7 @@ export const Game = (() => {
             upgradePoolBuffer,
             upgradePassiveYield,
             upgradeReaction,
+            upgradeSpeed,
             resetMarket,
             selectMarket,
             reset

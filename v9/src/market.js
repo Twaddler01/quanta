@@ -14,7 +14,8 @@ export const Market = (() => {
 
     function periodMultOf(id) {
         const override = def(id)?.wave?.periodMult;
-        return Math.max(0.1, override ?? Config.WAVE_PERIOD_MULT);
+        const base = Math.max(0.1, override ?? Config.WAVE_PERIOD_MULT);
+        return base * marketSpeedMult(id);
     }
     function noiseMultOf(id) {
         const override = def(id)?.wave?.noiseMult;
@@ -30,6 +31,12 @@ export const Market = (() => {
     function signalMult() {
         const lv = State.get().reaction || 0;
         return Math.max(0.3, 1 - lv * Config.REACTION_PER_LEVEL);
+    }
+
+    /* Frequency Coil: scales the wave tempo for one market. */
+    function marketSpeedMult(id) {
+        const lv = State.get().markets[id]?.speedLevel || 0;
+        return 1 + lv * Config.SPEED_PER_LEVEL;
     }
 
     function basePrice() {
@@ -242,6 +249,33 @@ export const Market = (() => {
         if (mk.q < cost + Config.STARTING_Q_PER_MARKET) return false;
         mk.q -= cost;
         mk.shares += 1;
+        return true;
+    }
+
+    /* ---- frequency coil ---- */
+
+    function speedUpgradeCost(id) {
+        const lv = State.get().markets[id]?.speedLevel || 0;
+        return (
+            Config.SPEED_UPGRADE_BASE * Math.pow(Config.SPEED_UPGRADE_MULT, lv)
+        );
+    }
+    function canUpgradeSpeed(id) {
+        const s = State.get();
+        const mk = s.markets[id];
+        if (!mk) return false;
+        if ((mk.speedLevel || 0) >= Config.SPEED_MAX_LEVEL) return false;
+        return s.Q >= speedUpgradeCost(id);
+    }
+    function upgradeSpeed(id) {
+        const s = State.get();
+        const mk = s.markets[id];
+        if (!mk) return false;
+        if ((mk.speedLevel || 0) >= Config.SPEED_MAX_LEVEL) return false;
+        const cost = speedUpgradeCost(id);
+        if (s.Q < cost) return false;
+        s.Q -= cost;
+        mk.speedLevel = (mk.speedLevel || 0) + 1;
         return true;
     }
 
@@ -567,6 +601,7 @@ export const Market = (() => {
         noiseMultOf,
         waveAmpMult,
         signalMult,
+        marketSpeedMult,
         isUnlocked,
 
         marketMultiplier,
@@ -587,6 +622,10 @@ export const Market = (() => {
         shareUpgradeCost,
         shareUpgradeRequirement,
         upgradeShares,
+        /* speed */
+        speedUpgradeCost,
+        canUpgradeSpeed,
+        upgradeSpeed,
         /* trading */
         buyUnits,
         sellUnits,

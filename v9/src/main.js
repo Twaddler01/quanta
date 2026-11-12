@@ -41,6 +41,7 @@ window.QUANTA = {
                 poolMax: Market.poolMax(m.id),
                 cashOuts: s.markets[m.id].cashOutCount,
                 level: s.markets[m.id].level || 0,
+                speedLevel: s.markets[m.id].speedLevel || 0,
                 levelPassive: Market.levelPassiveRate(m.id)
             }))
         };
@@ -98,6 +99,18 @@ window.QUANTA = {
         State.get().markets[mid].pool = Market.poolMax(mid);
         UI.render();
         return "Pool filled to " + Format.num(Market.poolMax(mid));
+    },
+    setSpeedLevel: (id, n) => {
+        const mid = id || State.get().activeMarket;
+        const mk = State.get().markets[mid];
+        mk.speedLevel = Math.max(0, Math.min(Config.SPEED_MAX_LEVEL, n | 0));
+        UI.render();
+        return (
+            "Speed level: " +
+            mk.speedLevel +
+            " · wave ×" +
+            Market.marketSpeedMult(mid).toFixed(2)
+        );
     },
     setCashOuts: (id, n) => {
         const mid = id || State.get().activeMarket;
