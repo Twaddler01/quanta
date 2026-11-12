@@ -2,9 +2,9 @@ export const Config = (() => {
     const DEBUG_MODE = false;
 
     /* ---- level curve constants ---- */
-    const LEVEL_BASE_STEP = 6;    // cash-outs for L1
-    const LEVEL_ADD = 3;          // step increment per level
-    const LEVEL_QUAD = 0.5;       // extra quadratic growth per level
+    const LEVEL_BASE_STEP = 6; // cash-outs for L1
+    const LEVEL_ADD = 3; // step increment per level
+    const LEVEL_QUAD = 0.5; // extra quadratic growth per level
     const LEVEL_BONUS_BASE = 0.6; // Q/s at L1, scaled by L^exp
     const LEVEL_BONUS_EXP = 0.9;
     const LEVEL_TIP_PCT = 0.05; // per-cash-out lump tip = value × this
@@ -42,16 +42,16 @@ export const Config = (() => {
         {
             id: "calm",
             name: "Calm Waters",
-            tierWeight: 1.2,
-            priceMult: 1.2,
+            tierWeight: 1.0,
+            priceMult: 1.0,
             threshold: 1000,
             unlockAt: 0,
             wave: {
-                amp1: 0.2,
-                period1: 25,
-                amp2: 0.08,
-                period2: 20,
-                noiseAmp: 0.02,
+                amp1: 0.25,
+                period1: 15,
+                amp2: 0.05,
+                period2: 10,
+                noiseAmp: 0.015,
                 periodMult: 1.5
             }
         },
@@ -235,7 +235,7 @@ export const Config = (() => {
         REACTION_MULT: 2.5,
         REACTION_PER_LEVEL: 0.05,
         REACTION_MAX_LEVEL: 10,
-        
+
         /* ---- Broker License (trading fee reduction) ---- */
         BROKER_BASE: 2000,
         BROKER_MULT: 2.5,
@@ -427,7 +427,10 @@ export const Save = (() => {
             ),
             brokerLicense: Math.max(
                 0,
-                Math.min(Config.BROKER_MAX_LEVEL, Math.floor(num(p.brokerLicense)))
+                Math.min(
+                    Config.BROKER_MAX_LEVEL,
+                    Math.floor(num(p.brokerLicense))
+                )
             ),
             activeMarket: Config.MARKETS.some(m => m.id === p.activeMarket)
                 ? p.activeMarket
