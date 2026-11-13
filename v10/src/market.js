@@ -191,7 +191,9 @@ export const Market = (() => {
 
     const buyPrice = (id, t) => naturalPrice(id, t) * (1 + brokerFee());
     const sellPrice = id => t => naturalPrice(id, t);
-
+    const sellPriceBoosted = (id, t) =>
+        naturalPrice(id, t) * (1 + streakBonus(id));
+    
     /* ---- multipliers ---- */
 
     function marketMultiplier(id) {
@@ -279,7 +281,8 @@ export const Market = (() => {
             pct: stepSize > 0 ? Math.min(100, (within / stepSize) * 100) : 0,
             nextBonus: Config.bonusAtLevel(level + 1) * sm,
             currentPassive: levelPassiveRate(id),
-            nextPassive: levelPassiveRate(id) + Config.bonusAtLevel(level + 1) * sm
+            nextPassive:
+                levelPassiveRate(id) + Config.bonusAtLevel(level + 1) * sm
         };
     }
 
@@ -384,7 +387,9 @@ export const Market = (() => {
         const mk = s.markets[id];
         n = Math.min(n, mk.holding);
         if (n <= 0) return { sold: 0, gain: 0, profit: 0 };
-        const price = priceOverride ?? sellPrice(id)(t);
+        const baseP = priceOverride ?? sellPrice(id)(t);
+        const streakMult = 1 + streakBonus(id);
+        const price = baseP * streakMult;
         const gain = n * price;
         const avgCost = mk.holding > 0 ? mk.costBasis / mk.holding : 0;
         const profit = n * (price - avgCost);
@@ -402,7 +407,6 @@ export const Market = (() => {
             mk.interestExpiresAt =
                 Date.now() + Config.INTEREST_WINDOW_SEC * 1000;
 
-            /* streak update */
             const nowMs = Date.now();
             const withinWindow =
                 (mk.streak || 0) > 0 &&
@@ -415,19 +419,14 @@ export const Market = (() => {
         mk.lastSellProfit = profit;
         mk.lastSellTotal = gain;
         mk.lastSellTime = Date.now();
-        return { sold: n, gain, profit, price };
+        return { sold: n, gain, profit, price, basePrice: baseP, streakMult };
     }
 
     /* ---- cash out ---- */
 
     function cashOutValue(id) {
         const mk = State.get().markets[id];
-        return (
-            mk.pool *
-            portfolioBoostMult() *
-            (1 + streakBonus(id)) *
-            starMult(id)
-        );
+        return mk.pool * portfolioBoostMult() * starMult(id);
     }
 
     function canCashOut(id) {
@@ -719,6 +718,7 @@ export const Market = (() => {
         naturalPrice,
         buyPrice,
         sellPrice,
+        sellPriceBoosted,
         periodMultOf,
         noiseMultOf,
         waveAmpMult,

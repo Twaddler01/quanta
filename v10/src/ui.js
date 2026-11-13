@@ -674,7 +674,8 @@ export const UI = (() => {
 
             if (!unlocked) {
                 ref.nameEl.textContent = "🔒 " + m.name;
-                ref.subEl.textContent = "unlock " + Format.num(m.unlockAt) + " Q";
+                ref.subEl.textContent =
+                    "unlock " + Format.num(m.unlockAt) + " Q";
             } else {
                 ref.nameEl.textContent = starPrefix + lvPrefix + m.name;
 
@@ -705,18 +706,29 @@ export const UI = (() => {
 
         /* ============ Market status ============ */
         $("#statusShares").textContent = mk.shares;
-
+        
         const cap = Market.poolMax(id);
         const poolPct = cap > 0 ? (mk.pool / cap) * 100 : 0;
         const fullPct = Config.CASHOUT_FULL_THRESHOLD * 100;
+        
+        /* effective cash-out value — includes portfolio boost, streak, stars */
+        const effectiveVal = Market.cashOutValue(id);
+        const totalMult =
+            Market.portfolioBoostMult() * Market.starMult(id);
+        const showMult = totalMult > 1.005 && mk.pool > 0;
+        
         const statusPoolEl = $("#statusPool");
-        statusPoolEl.textContent =
+        let poolText =
             Format.num(mk.pool) +
             "/" +
             Format.num(cap) +
             " (" +
             poolPct.toFixed(0) +
             "%)";
+        if (showMult) {
+            poolText += " · ✦" + Format.num(effectiveVal) + " Q";
+        }
+        statusPoolEl.textContent = poolText;
         statusPoolEl.style.color =
             poolPct >= 99.5
                 ? "var(--cost)"
@@ -780,8 +792,8 @@ export const UI = (() => {
         const streakEl = $("#streakRow");
         if (streak > 0 && streakMs > 0) {
             const secs = Math.ceil(streakMs / 1000);
-            streakEl.textContent =
-                "×" + streakMult.toFixed(2) + " · " + secs + "s";
+            const bonusPct = Math.round((streakMult - 1) * 100);
+            streakEl.textContent = "sell +" + bonusPct + "% · " + secs + "s";
             streakEl.style.color = "var(--good)";
         } else {
             streakEl.textContent = "—";
@@ -831,9 +843,17 @@ export const UI = (() => {
         $("#buy1Amount").textContent = "Ⓠ " + Format.num(buyP);
         $("#buyMaxAmount").textContent =
             maxAfford > 0 ? "Ⓠ " + Format.num(maxAfford * buyP) : "—";
-        $("#sell1Amount").textContent = "Ⓠ " + Format.num(sellP);
+
+        const sellBoostedP = Market.sellPriceBoosted(id, t);
+        const streakLive =
+            (mk.streak || 0) > 0 && Market.streakTimeLeftMs(id) > 0;
+        const sellDisplay = streakLive ? sellBoostedP : sellP;
+        const sellSuffix = streakLive ? " ✦" : "";
+        
+        $("#sell1Amount").textContent =
+            "Ⓠ " + Format.num(sellDisplay) + sellSuffix;
         $("#sellAllAmount").textContent = canSell
-            ? "Ⓠ " + Format.num(mk.holding * sellP)
+            ? "Ⓠ " + Format.num(mk.holding * sellDisplay) + sellSuffix
             : "—";
 
         $("#buy1").classList.toggle("can", canBuy);
@@ -853,14 +873,20 @@ export const UI = (() => {
         const coAmt = $("#cashOutAmount");
         const val = Market.cashOutValue(id);
         const tip = val * Config.LEVEL_TIP_PCT;
-
+        const multSuffix = showMult ? " · ×" + totalMult.toFixed(2) : "";
+        
         const pct = Math.min(100, cCheck.pct || 0);
         coFill.style.width = pct + "%";
-
+        
         if (cCheck.ok) {
             coLabel.textContent = "CASH OUT";
             coAmt.textContent =
-                "+" + Format.num(val) + " Q (+" + Format.num(tip) + ")";
+                "+" +
+                Format.num(val) +
+                " Q (+" +
+                Format.num(tip) +
+                ")" +
+                multSuffix;
             coBtn.classList.add("can", "full");
             coBtn.classList.remove("poor");
         } else if (cCheck.reason === "cooldown") {
@@ -870,7 +896,7 @@ export const UI = (() => {
             coBtn.classList.add("poor");
         } else {
             coLabel.textContent = "CASH POOL " + Math.round(pct) + "%";
-            coAmt.textContent = "+" + Format.num(val) + " Q";
+            coAmt.textContent = "+" + Format.num(val) + " Q" + multSuffix;
             coBtn.classList.remove("can", "full");
             coBtn.classList.add("poor");
         }
@@ -957,57 +983,59 @@ export const UI = (() => {
         $("#upgradeSpeedBtn").classList.toggle("can", canSpeed);
         $("#upgradeSpeedBtn").classList.toggle("poor", !canSpeed);
 
-/* prestige panel */
-const pv = Market.prestigePreview(id);
-const ppEl = $("#prestigePanel");
-const showPrestige = pv.stars > 0 || pv.level >= 1;
-ppEl.classList.toggle("hidden", !showPrestige);
+        /* prestige panel */
+        const pv = Market.prestigePreview(id);
+        const ppEl = $("#prestigePanel");
+        const showPrestige = pv.stars > 0 || pv.level >= 1;
+        ppEl.classList.toggle("hidden", !showPrestige);
 
-if (showPrestige) {
-    $("#prestigePanelStars").textContent = "⭐×" + pv.stars;
-    $("#prestigePanelMult").textContent =
-        "×" + pv.currentMult.toFixed(2);
+        if (showPrestige) {
+            $("#prestigePanelStars").textContent = "⭐×" + pv.stars;
+            $("#prestigePanelMult").textContent =
+                "×" + pv.currentMult.toFixed(2);
 
-    if (pv.canPrestige) {
-        $("#prestigePanelNow").textContent =
-            "Prestige now → ⭐×" + pv.totalStarsIfNow +
-            " total · ×" + pv.newMultIfNow.toFixed(2);
-    } else {
-        $("#prestigePanelNow").textContent =
-            "Unlocks at LV" + Config.PRESTIGE_LEVEL_MIN +
-            " (currently LV" + pv.level + ")";
-    }
+            if (pv.canPrestige) {
+                $("#prestigePanelNow").textContent =
+                    "Prestige now → ⭐×" +
+                    pv.totalStarsIfNow +
+                    " total · ×" +
+                    pv.newMultIfNow.toFixed(2);
+            } else {
+                $("#prestigePanelNow").textContent =
+                    "Unlocks at LV" +
+                    Config.PRESTIGE_LEVEL_MIN +
+                    " (currently LV" +
+                    pv.level +
+                    ")";
+            }
 
-    const previewRows = [];
-    for (const p of pv.previews) {
-        previewRows.push(
-            div(
-                { className: "prestige-preview-row" },
-                [
-                    span(
-                        { className: "prestige-preview-lv" },
-                        "L" + p.level
-                    ),
-                    span(
-                        { className: "prestige-preview-stars" },
-                        "→ ⭐×" + p.totalStars
-                    ),
-                    span(
-                        { className: "prestige-preview-mult" },
-                        "×" + p.mult.toFixed(2)
-                    )
-                ]
-            )
-        );
-    }
-    $("#prestigePanelPreview").replaceChildren(...previewRows);
+            const previewRows = [];
+            for (const p of pv.previews) {
+                previewRows.push(
+                    div({ className: "prestige-preview-row" }, [
+                        span(
+                            { className: "prestige-preview-lv" },
+                            "L" + p.level
+                        ),
+                        span(
+                            { className: "prestige-preview-stars" },
+                            "→ ⭐×" + p.totalStars
+                        ),
+                        span(
+                            { className: "prestige-preview-mult" },
+                            "×" + p.mult.toFixed(2)
+                        )
+                    ])
+                );
+            }
+            $("#prestigePanelPreview").replaceChildren(...previewRows);
 
-    const pvBtn = $("#prestigeBtn");
-    pvBtn.classList.toggle("can", pv.canPrestige);
-    pvBtn.classList.toggle("poor", !pv.canPrestige);
-    pvBtn.disabled = !pv.canPrestige;
-}
-        
+            const pvBtn = $("#prestigeBtn");
+            pvBtn.classList.toggle("can", pv.canPrestige);
+            pvBtn.classList.toggle("poor", !pv.canPrestige);
+            pvBtn.disabled = !pv.canPrestige;
+        }
+
         drawChart();
         renderPortfolioAndProfile();
     }
@@ -1054,7 +1082,10 @@ if (showPrestige) {
                 div(
                     { className: "portfolio-row" + (isDebug ? " debug" : "") },
                     [
-                        span({ className: "pr-name" }, starPrefix + lvPrefix + m.name + debugTag),
+                        span(
+                            { className: "pr-name" },
+                            starPrefix + lvPrefix + m.name + debugTag
+                        ),
                         span({ className: "pr-info" }, info)
                     ]
                 )

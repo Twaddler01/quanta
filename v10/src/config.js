@@ -260,8 +260,8 @@ export const Config = (() => {
 
         /* ---- Streak (consecutive profitable trades per market) ---- */
         STREAK_WINDOW_MS: 15000,
-        STREAK_PER: 0.02,
-        STREAK_CAP: 0.5,
+        STREAK_PER: 0.2,
+        STREAK_CAP: 2.0,
 
         /* ---- level helpers ---- */
         LEVEL_BASE_STEP,

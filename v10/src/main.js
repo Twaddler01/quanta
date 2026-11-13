@@ -34,6 +34,7 @@ window.QUANTA = {
             brokerLicense: s.brokerLicense || 0,
             signalMult: Market.signalMult(),
             totalLevels: Market.totalLevels(),
+            streakBonus: Market.streakBonus(s.activeMarket),
             markets: Config.MARKETS.map(m => ({
                 id: m.id,
                 debug: !!m.debug,
@@ -45,6 +46,8 @@ window.QUANTA = {
                 speedLevel: s.markets[m.id].speedLevel || 0,
                 streak: s.markets[m.id].streak || 0,
                 streakTimeLeftMs: Market.streakTimeLeftMs(m.id),
+                sellPrice: Market.sellPrice(m.id)(Date.now() / 1000),
+                sellPriceBoosted: Market.sellPriceBoosted(m.id, Date.now() / 1000),
                 stars: s.markets[m.id].stars || 0,
                 starMult: Market.starMult(m.id),
                 levelPassive: Market.levelPassiveRate(m.id)

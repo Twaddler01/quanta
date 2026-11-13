@@ -21,8 +21,15 @@ export const Game = (() => {
         if (r.sold > 0) {
             Save.write();
             UI.render();
-            if (r.profit > 0)
-                UI.toast("+" + Format.num(r.profit) + " q profit · pool fed");
+            if (r.profit > 0) {
+                const boost =
+                    r.streakMult && r.streakMult > 1.01
+                        ? " · ×" + r.streakMult.toFixed(2) + " streak"
+                        : "";
+                UI.toast(
+                    "+" + Format.num(r.profit) + " q profit" + boost + " · pool fed"
+                );
+            }
         }
     }
 
