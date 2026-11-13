@@ -205,13 +205,16 @@ export const Config = (() => {
         SHARE_UPGRADE_BASE: 100,
         SHARE_UPGRADE_MULT: 1.2,
 
-        POOL_MAX_BASE: 350,
-        SHARE_POOL_BONUS: 0.15,
+        POOL_MAX_BASE: 1200,
+        SHARE_POOL_BONUS: 0.02,
+        POOL_FILL_CAP_BASE: 0.13,
+        POOL_FILL_CAP_PER_LEVEL: 0.035,
+        POOL_FILL_CAP_MAX: 1.0,
         POOL_ROUTE: 0.8,
-        INTEREST_COEF: 0.02,
+        INTEREST_COEF: 0.008,
         INTEREST_WINDOW_SEC: 60,
         CASHOUT_FULL_THRESHOLD: 1,
-        CASHOUT_COOLDOWN: 5,
+        CASHOUT_COOLDOWN: 0,
 
         RESET_COOLDOWN: 60,
         RESET_THRESHOLD_Q: 50,
@@ -257,6 +260,9 @@ export const Config = (() => {
         /* ---- Prestige (per-market reset for stars) ---- */
         PRESTIGE_LEVEL_MIN: 5,
         PRESTIGE_STAR_PER: 0.03,
+
+        /* ---- Global cash multiplier (all markets, based on total cash-outs) ---- */
+        GLOBAL_CASH_REF: 20,
 
         /* ---- Streak (consecutive profitable trades per market) ---- */
         STREAK_WINDOW_MS: 15000,
@@ -307,7 +313,9 @@ export const State = (() => {
             speedLevel: 0,
             streak: 0,
             lastStreakAt: 0,
-            stars: 0
+            stars: 0,
+            lastCashOutValue: 0,
+            fillCap: 0,
         };
     }
 
@@ -435,7 +443,9 @@ export const Save = (() => {
                 ),
                 streak: Math.max(0, Math.floor(num(saved.streak))),
                 lastStreakAt: Math.max(0, num(saved.lastStreakAt)),
-                stars: Math.max(0, Math.floor(num(saved.stars)))
+                stars: Math.max(0, Math.floor(num(saved.stars))),
+                lastCashOutValue: Math.max(0, num(saved.lastCashOutValue)),
+                fillCap: Math.max(0, num(saved.fillCap)),
             };
         }
 
@@ -491,6 +501,9 @@ export const Save = (() => {
     function wipe() {
         try {
             localStorage.removeItem(KEY);
+        } catch (e) {}
+        try {
+            localStorage.removeItem(LEGACY_KEY);
         } catch (e) {}
     }
 

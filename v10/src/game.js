@@ -252,11 +252,48 @@ export const Game = (() => {
         );
     }
 
+    function autoCashOut() {
+        const s = State.get();
+        let fired = 0;
+        let biggest = 0;
+        for (const m of Config.MARKETS) {
+            const mk = s.markets[m.id];
+            const cap = Market.poolMax(m.id);
+            if (cap > 0 && mk.pool >= cap) {
+                const r = Market.cashOut(m.id);
+                if (r.ok) {
+                    fired++;
+                    if (r.value > biggest) biggest = r.value;
+                    if (r.levelUp) {
+                        UI.toast(
+                            "⭐ " +
+                                Market.def(m.id).name +
+                                " LV" +
+                                r.newLevel +
+                                " · +" +
+                                Format.num(r.bonusGained) +
+                                " Q/s passive"
+                        );
+                    }
+                }
+            }
+        }
+        if (fired > 0) {
+            if (fired === 1 && biggest > 0) {
+                UI.toast("+" + Format.num(biggest) + " Q auto-cashed");
+            } else if (fired > 1) {
+                UI.toast(fired + " markets auto-cashed");
+            }
+            Save.write();
+        }
+    }
+    
     function frame(now) {
         const dt = Math.min(0.1, (now - lastFrame) / 1000);
         lastFrame = now;
         lastWall = Date.now();
         Market.tick(dt);
+        autoCashOut();
         renderAcc += dt;
         if (renderAcc >= 0.066) {
             renderAcc = 0;
@@ -270,7 +307,6 @@ export const Game = (() => {
             buy,
             sell,
             upgradeShares,
-            cashOut,
             upgradePortfolio,
             upgradeInterestBooster,
             upgradeMarketLeverage,

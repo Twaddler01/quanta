@@ -109,10 +109,12 @@ export const Market = (() => {
         mk.costBasis = 0;
         mk.lifetimeProfit = 0;
         /* lifetimeCashOut preserved — feeds Passive Yield portfolio upgrade */
+        mk.lastCashOutValue = 0;
         mk.cashOutCount = 0;
         mk.level = 0;
         mk.lastLevelUpTime = 0;
         mk.pool = 0;
+        mk.fillCap = 0;
         mk.recentProfit = 0;
         mk.interestExpiresAt = 0;
         mk.cashOutCooldown = 0;
@@ -193,18 +195,18 @@ export const Market = (() => {
     const sellPrice = id => t => naturalPrice(id, t);
     const sellPriceBoosted = (id, t) =>
         naturalPrice(id, t) * (1 + streakBonus(id));
-    
-    /* ---- multipliers ---- */
 
-    function marketMultiplier(id) {
-        const m = def(id);
-        const mk = State.get().markets[id];
-        return 1 + Math.sqrt(Math.max(0, mk.lifetimeProfit) / m.threshold);
-    }
+    /* ---- multipliers ---- */
 
     function shareMult(id) {
         const mk = State.get().markets[id];
         return 1 + mk.shares * Config.SHARE_POOL_BONUS;
+    }
+
+    /* Global cash multiplier — grows with total cash-outs across all markets. */
+    function globalCashMult() {
+        const total = totalCashOuts();
+        return 1 + Math.sqrt(total / Config.GLOBAL_CASH_REF);
     }
 
     function portfolioBoostMult() {
@@ -226,7 +228,6 @@ export const Market = (() => {
         const m = def(id);
         return (
             Config.POOL_MAX_BASE *
-            marketMultiplier(id) *
             shareMult(id) *
             m.tierWeight *
             poolBufferMult()
@@ -389,23 +390,40 @@ export const Market = (() => {
         if (n <= 0) return { sold: 0, gain: 0, profit: 0 };
         const baseP = priceOverride ?? sellPrice(id)(t);
         const streakMult = 1 + streakBonus(id);
-        const price = baseP * streakMult;
+        const starM = starMult(id);
+        const price = baseP * streakMult * starM;
         const gain = n * price;
         const avgCost = mk.holding > 0 ? mk.costBasis / mk.holding : 0;
         const profit = n * (price - avgCost);
+        const baseProfit = n * (baseP - avgCost);
+
         mk.q += gain;
         mk.holding -= n;
         mk.costBasis -= avgCost * n;
         if (mk.holding === 0) mk.costBasis = 0;
+
+        /* ALWAYS reset the interest window on any sell.
+       A losing trade should not keep earning interest from a prior win. */
+        mk.recentProfit = Math.max(0, baseProfit);
+        mk.interestExpiresAt =
+            mk.recentProfit > 0
+                ? Date.now() + Config.INTEREST_WINDOW_SEC * 1000
+                : 0;
+
         if (profit > 0) {
             mk.lifetimeProfit += profit;
-            mk.pool = Math.min(
-                poolMax(id),
-                mk.pool + profit * Config.POOL_ROUTE
+            const poolCap = poolMax(id);
+            const lvl = levelOf(id);
+            const capPct = Math.min(
+                Config.POOL_FILL_CAP_MAX,
+                (Config.POOL_FILL_CAP_BASE +
+                    lvl * Config.POOL_FILL_CAP_PER_LEVEL) *
+                    Math.sqrt(starM)
             );
-            mk.recentProfit = profit;
-            mk.interestExpiresAt =
-                Date.now() + Config.INTEREST_WINDOW_SEC * 1000;
+            const maxDelta = poolCap * capPct;
+            const delta = Math.min(profit * Config.POOL_ROUTE, maxDelta);
+            mk.pool = Math.min(poolCap, mk.pool + delta);
+            if (mk.pool > 0 && !mk.fillCap) mk.fillCap = poolCap;
 
             const nowMs = Date.now();
             const withinWindow =
@@ -426,7 +444,7 @@ export const Market = (() => {
 
     function cashOutValue(id) {
         const mk = State.get().markets[id];
-        return mk.pool * portfolioBoostMult() * starMult(id);
+        return mk.pool * globalCashMult() * portfolioBoostMult() * starMult(id);
     }
 
     function canCashOut(id) {
@@ -460,17 +478,24 @@ export const Market = (() => {
         if (!check.ok) return { ok: false, reason: check.reason };
         const s = State.get();
         const mk = s.markets[id];
-        const value = cashOutValue(id);
+        const capForPayout = mk.fillCap || poolMax(id);
+        const value =
+            capForPayout *
+            globalCashMult() *
+            portfolioBoostMult() *
+            starMult(id);
         const tip = value * Config.LEVEL_TIP_PCT;
         const qBefore = s.Q;
 
         s.Q += value + tip;
         s.total += value + tip;
         mk.lastCashOut = Date.now();
+        mk.lastCashOutValue = value;
         mk.cashOutCooldown = Config.CASHOUT_COOLDOWN;
         mk.lifetimeCashOut += value;
         mk.cashOutCount += 1;
         mk.pool = 0;
+        mk.fillCap = 0;
         mk.recentProfit = 0;
         mk.interestExpiresAt = 0;
 
@@ -704,8 +729,10 @@ export const Market = (() => {
                         Config.INTEREST_COEF *
                         interestBoostMult() *
                         Math.sqrt(tLeft);
+
                     const cap = poolMax(m.id);
                     mk.pool = Math.min(cap, mk.pool + rate * dt);
+                    if (mk.pool > 0 && !mk.fillCap) mk.fillCap = poolMax(m.id);
                 }
             }
         }
@@ -737,8 +764,8 @@ export const Market = (() => {
         prestige,
         isUnlocked,
 
-        marketMultiplier,
         shareMult,
+        globalCashMult,
         portfolioBoostMult,
         interestBoostMult,
         poolBufferMult,

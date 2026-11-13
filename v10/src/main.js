@@ -35,6 +35,8 @@ window.QUANTA = {
             signalMult: Market.signalMult(),
             totalLevels: Market.totalLevels(),
             streakBonus: Market.streakBonus(s.activeMarket),
+            globalCashMult: Market.globalCashMult(),
+            totalCashOuts: Market.totalCashOuts(),
             markets: Config.MARKETS.map(m => ({
                 id: m.id,
                 debug: !!m.debug,
@@ -43,12 +45,17 @@ window.QUANTA = {
                 poolMax: Market.poolMax(m.id),
                 cashOuts: s.markets[m.id].cashOutCount,
                 level: s.markets[m.id].level || 0,
+                levelPct: Math.round(Market.levelProgress(m.id).pct),
                 speedLevel: s.markets[m.id].speedLevel || 0,
                 streak: s.markets[m.id].streak || 0,
                 streakTimeLeftMs: Market.streakTimeLeftMs(m.id),
                 sellPrice: Market.sellPrice(m.id)(Date.now() / 1000),
-                sellPriceBoosted: Market.sellPriceBoosted(m.id, Date.now() / 1000),
+                sellPriceBoosted: Market.sellPriceBoosted(
+                    m.id,
+                    Date.now() / 1000
+                ),
                 stars: s.markets[m.id].stars || 0,
+                lastCashOutValue: s.markets[m.id].lastCashOutValue || 0,
                 starMult: Market.starMult(m.id),
                 levelPassive: Market.levelPassiveRate(m.id)
             }))
@@ -101,6 +108,12 @@ window.QUANTA = {
         const r = Market.cashOut(mid);
         UI.render();
         return r;
+    },
+    autoFire: id => {
+        const mid = id || State.get().activeMarket;
+        const cap = Market.poolMax(mid);
+        State.get().markets[mid].pool = cap;
+        return "Pool at cap — auto-cash will fire next frame";
     },
     fillPool: id => {
         const mid = id || State.get().activeMarket;
@@ -164,7 +177,8 @@ window.QUANTA = {
         return "Saved";
     },
     wipe: () => {
+        Save.disable();
         Save.wipe();
         location.reload();
-    }
+    },
 };

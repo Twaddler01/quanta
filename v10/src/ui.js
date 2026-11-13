@@ -103,28 +103,40 @@ export const UI = (() => {
             "—"
         );
 
-        const cashOutFill = el("div", {
-            className: "co-fill",
-            id: "cashOutFill"
-        });
-        const cashOutLabel = span(
-            { className: "co-label", id: "cashOutLabel" },
-            "CASH POOL 0%"
-        );
-        const cashOutAmount = span(
-            { className: "co-amount", id: "cashOutAmount" },
-            "—"
-        );
-        const cashOutBtn = el(
-            "button",
-            {
-                className: "cashout-btn",
-                id: "cashOutBtn",
-                onClick: () => {
-                    actions.cashOut(State.get().activeMarket);
-                }
-            },
-            [cashOutFill, cashOutLabel, cashOutAmount]
+        const cashoutPanel = el(
+            "div",
+            { className: "cashout-panel", id: "cashoutPanel" },
+            [
+                div({ className: "cashout-panel-header" }, [
+                    span({ className: "cashout-panel-title" }, "CASH POOL")
+                ]),
+                div({ className: "cashout-bar" }, [
+                    div({ className: "cashout-bar-fill", id: "cashoutBarFill" })
+                ]),
+                div({ className: "cashout-panel-meta" }, [
+                    span(
+                        {
+                            className: "cashout-panel-pct",
+                            id: "cashoutPanelPct"
+                        },
+                        "0%"
+                    ),
+                    span(
+                        {
+                            className: "cashout-panel-amount",
+                            id: "cashoutPanelAmount"
+                        },
+                        "0q / 0q"
+                    )
+                ]),
+                div(
+                    {
+                        className: "cashout-panel-reward",
+                        id: "cashoutPanelReward"
+                    },
+                    "Previous: — · Next: —"
+                )
+            ]
         );
 
         const resetMarketBtn = el(
@@ -269,7 +281,7 @@ export const UI = (() => {
             el("div", { className: "chart-wrap" }, [canvas]),
             statRows,
             tradeBlock,
-            cashOutBtn,
+            cashoutPanel,
             resetMarketBtn,
             levelPanel,
             upgradeBtn,
@@ -677,19 +689,11 @@ export const UI = (() => {
                 ref.subEl.textContent =
                     "unlock " + Format.num(m.unlockAt) + " Q";
             } else {
-                ref.nameEl.textContent = starPrefix + lvPrefix + m.name;
-
-                const mk2 = s.markets[m.id];
-                const cap2 = Market.poolMax(m.id);
-                const stats =
-                    "×" +
-                    Format.plain(Market.marketMultiplier(m.id)) +
-                    " · " +
-                    Format.num(mk2.pool) +
-                    "/" +
-                    Format.num(cap2) +
-                    "q";
-                ref.subEl.textContent = seen ? stats : "NEW — tap to view";
+                ref.nameEl.textContent = starPrefix + m.name;
+                const lp = Market.levelProgress(m.id);
+                ref.subEl.textContent = seen
+                    ? "LV" + lp.level + " " + Math.round(lp.pct) + "%"
+                    : "NEW — tap to view";
             }
         }
 
@@ -697,38 +701,23 @@ export const UI = (() => {
         const mDef = Market.def(id);
         const level = Market.levelOf(id);
         const lvPrefix = level > 0 ? "LV" + level + " · " : "";
-        $("#activeMarketName").textContent =
-            lvPrefix +
-            mDef.name +
-            " · ×" +
-            Format.plain(Market.marketMultiplier(id)) +
-            " mult";
+        $("#activeMarketName").textContent = lvPrefix + mDef.name;
 
         /* ============ Market status ============ */
         $("#statusShares").textContent = mk.shares;
-        
+
         const cap = Market.poolMax(id);
         const poolPct = cap > 0 ? (mk.pool / cap) * 100 : 0;
         const fullPct = Config.CASHOUT_FULL_THRESHOLD * 100;
-        
-        /* effective cash-out value — includes portfolio boost, streak, stars */
-        const effectiveVal = Market.cashOutValue(id);
-        const totalMult =
-            Market.portfolioBoostMult() * Market.starMult(id);
-        const showMult = totalMult > 1.005 && mk.pool > 0;
-        
+
         const statusPoolEl = $("#statusPool");
-        let poolText =
+        statusPoolEl.textContent =
             Format.num(mk.pool) +
             "/" +
             Format.num(cap) +
             " (" +
             poolPct.toFixed(0) +
             "%)";
-        if (showMult) {
-            poolText += " · ✦" + Format.num(effectiveVal) + " Q";
-        }
-        statusPoolEl.textContent = poolText;
         statusPoolEl.style.color =
             poolPct >= 99.5
                 ? "var(--cost)"
@@ -849,7 +838,7 @@ export const UI = (() => {
             (mk.streak || 0) > 0 && Market.streakTimeLeftMs(id) > 0;
         const sellDisplay = streakLive ? sellBoostedP : sellP;
         const sellSuffix = streakLive ? " ✦" : "";
-        
+
         $("#sell1Amount").textContent =
             "Ⓠ " + Format.num(sellDisplay) + sellSuffix;
         $("#sellAllAmount").textContent = canSell
@@ -865,41 +854,34 @@ export const UI = (() => {
         $("#sellAll").classList.toggle("can", canSell);
         $("#sellAll").classList.toggle("poor", !canSell);
 
-        /* cash out */
-        const cCheck = Market.canCashOut(id);
-        const coBtn = $("#cashOutBtn");
-        const coFill = $("#cashOutFill");
-        const coLabel = $("#cashOutLabel");
-        const coAmt = $("#cashOutAmount");
-        const val = Market.cashOutValue(id);
-        const tip = val * Config.LEVEL_TIP_PCT;
-        const multSuffix = showMult ? " · ×" + totalMult.toFixed(2) : "";
-        
-        const pct = Math.min(100, cCheck.pct || 0);
-        coFill.style.width = pct + "%";
-        
-        if (cCheck.ok) {
-            coLabel.textContent = "CASH OUT";
-            coAmt.textContent =
-                "+" +
-                Format.num(val) +
-                " Q (+" +
-                Format.num(tip) +
-                ")" +
-                multSuffix;
-            coBtn.classList.add("can", "full");
-            coBtn.classList.remove("poor");
-        } else if (cCheck.reason === "cooldown") {
-            coLabel.textContent = "COOLDOWN " + Math.ceil(cCheck.left) + "s";
-            coAmt.textContent = "—";
-            coBtn.classList.remove("can", "full");
-            coBtn.classList.add("poor");
-        } else {
-            coLabel.textContent = "CASH POOL " + Math.round(pct) + "%";
-            coAmt.textContent = "+" + Format.num(val) + " Q" + multSuffix;
-            coBtn.classList.remove("can", "full");
-            coBtn.classList.add("poor");
-        }
+        /* cash pool panel */
+        const livePmax = Market.poolMax(id);
+        const capCp = mk.fillCap || livePmax;
+        const poolPctCp = capCp > 0 ? (mk.pool / capCp) * 100 : 0;
+        const totalMultCp =
+            Market.globalCashMult() *
+            Market.portfolioBoostMult() *
+            Market.starMult(id);
+        const nextVal = capCp * totalMultCp;
+        const prevVal = mk.lastCashOutValue || 0;
+
+        $("#cashoutBarFill").style.width = Math.min(100, poolPctCp) + "%";
+        $("#cashoutPanelPct").textContent = Math.round(poolPctCp) + "%";
+        $("#cashoutPanelAmount").textContent =
+            Format.num(mk.pool) + "q / " + Format.num(capCp) + "q";
+        $("#cashoutPanelReward").textContent =
+            "Previous: " +
+            (prevVal > 0 ? Format.num(prevVal) + " Q" : "—") +
+            " · On fill: " +
+            Format.num(nextVal) +
+            " Q (×" +
+            totalMultCp.toFixed(2) +
+            ")";
+
+        const cpEl = $("#cashoutPanel");
+        const flashCashout =
+            mk.lastCashOut && Date.now() - mk.lastCashOut < 1400;
+        cpEl.classList.toggle("fired", !!flashCashout);
 
         /* reset */
         const rCheck = Market.canReset(id);
