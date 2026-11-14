@@ -115,6 +115,7 @@ export const Market = (() => {
         mk.lastLevelUpTime = 0;
         mk.pool = 0;
         mk.fillCap = 0;
+        mk.cashoutMultiplier = 1;
         mk.recentProfit = 0;
         mk.interestExpiresAt = 0;
         mk.cashOutCooldown = 0;
@@ -242,6 +243,67 @@ export const Market = (() => {
         );
     }
 
+    function peakLevelOf(id) {
+        const mk = State.get().markets[id];
+        return mk?.peakLevel || 0;
+    }
+    
+    function cashoutMultiplierOf(id) {
+        const mk = State.get().markets[id];
+        return mk?.cashoutMultiplier || 1;
+    }
+    
+    function cashoutTarget(id) {
+        return poolMax(id) * cashoutMultiplierOf(id);
+    }
+    
+    function cashoutMultCost(id, mult) {
+        const m = def(id);
+        return Config.CASHOUT_MULT_COST_BASE * m.tierWeight * Math.pow(10, mult - 2);
+    }
+    
+    function canBuyCashoutMult(id, mult) {
+        const mk = State.get().markets[id];
+        if (!mk) return false;
+        if (mult <= (mk.maxCashoutMultiplier || 1)) return false;
+        if (mult > (mk.maxCashoutMultiplier || 1) + 1) return false;
+        const reqLevel =
+            mult === 2
+                ? Config.CASHOUT_MULT_2X_LEVEL
+                : Config.CASHOUT_MULT_3X_LEVEL;
+        if ((mk.peakLevel || 0) < reqLevel) return false;
+        return State.get().Q >= cashoutMultCost(id, mult);
+    }
+    
+    function buyCashoutMult(id, mult) {
+        if (!canBuyCashoutMult(id, mult)) return false;
+        const s = State.get();
+        const mk = s.markets[id];
+        s.Q -= cashoutMultCost(id, mult);
+        mk.maxCashoutMultiplier = mult;
+        mk.cashoutMultiplier = mult;
+        mk.fillCap = 0;
+        return true;
+    }
+    
+    function setCashoutMultiplier(id, mult) {
+        const mk = State.get().markets[id];
+        if (!mk) return false;
+        mult = Math.max(1, Math.min(3, Math.floor(mult)));
+        if (mult > (mk.maxCashoutMultiplier || 1)) return buyCashoutMult(id, mult);
+        if (mult === (mk.cashoutMultiplier || 1)) return true;
+        /* If lowering and pool would overflow the new target, fire at old rate first */
+        if (mult < (mk.cashoutMultiplier || 1) && mk.pool > 0) {
+            const newTarget = poolMax(id) * mult;
+            if (mk.pool >= newTarget) {
+                cashOut(id);
+            }
+        }
+        mk.cashoutMultiplier = mult;
+        mk.fillCap = 0;
+        return true;
+    }
+    
     function currentInterestRate(id) {
         const mk = State.get().markets[id];
         const now = Date.now();
@@ -260,7 +322,14 @@ export const Market = (() => {
     /* ---- unlock ---- */
 
     function isUnlocked(id) {
-        return State.get().total >= def(id).unlockAt;
+        const m = def(id);
+        if (!m) return false;
+        if (State.get().total < m.unlockAt) return false;
+        if (m.unlockPrevMarket) {
+            const prev = State.get().markets[m.unlockPrevMarket];
+            if ((prev?.peakLevel || 0) < m.unlockPrevLevel) return false;
+        }
+        return true;
     }
 
     /* ---- level system ---- */
@@ -423,13 +492,12 @@ export const Market = (() => {
 
         if (profit > 0) {
             mk.lifetimeProfit += profit;
-            const liveCap = poolMax(id);
+            const liveCap = cashoutTarget(id);
             const capForFill = mk.fillCap || liveCap;
             const lvl = levelOf(id);
             const capPct = Math.min(
                 Config.POOL_FILL_CAP_MAX,
-                (Config.POOL_FILL_CAP_BASE +
-                    lvl * Config.POOL_FILL_CAP_PER_LEVEL) *
+                (Config.POOL_FILL_CAP_BASE + lvl * Config.POOL_FILL_CAP_PER_LEVEL) *
                     Math.sqrt(starM)
             );
             const maxDelta = capForFill * capPct;
@@ -461,7 +529,7 @@ export const Market = (() => {
 
     function canCashOut(id) {
         const mk = State.get().markets[id];
-        const cap = mk.fillCap || poolMax(id); // ← fillCap first
+        const cap = mk.fillCap || cashoutTarget(id);
         if (mk.cashOutCooldown > 0) {
             return {
                 ok: false,
@@ -489,7 +557,7 @@ export const Market = (() => {
         if (!check.ok) return { ok: false, reason: check.reason };
         const s = State.get();
         const mk = s.markets[id];
-        const capForPayout = mk.fillCap || poolMax(id);
+        const capForPayout = mk.fillCap || cashoutTarget(id);
         const value =
             capForPayout *
             globalCashMult() *
@@ -504,7 +572,7 @@ export const Market = (() => {
         mk.lastCashOutValue = value;
         mk.cashOutCooldown = Config.CASHOUT_COOLDOWN;
         mk.lifetimeCashOut += value;
-        mk.cashOutCount += 1;
+        mk.cashOutCount += (mk.cashoutMultiplier || 1);
         mk.pool = 0;
         mk.fillCap = 0;
         mk.recentProfit = 0;
@@ -521,6 +589,7 @@ export const Market = (() => {
         let bonusGained = 0;
         if (newLevel > prevLevel) {
             mk.level = newLevel;
+            mk.peakLevel = Math.max(mk.peakLevel || 0, newLevel);
             mk.lastLevelUpTime = Date.now();
             levelUp = true;
             for (let n = prevLevel + 1; n <= newLevel; n++) {
@@ -740,7 +809,7 @@ export const Market = (() => {
                         Config.INTEREST_COEF *
                         interestBoostMult() *
                         Math.sqrt(tLeft);
-                    const cap = mk.fillCap || poolMax(m.id);
+                    const cap = mk.fillCap || cashoutTarget(m.id);
                     mk.pool = Math.min(cap, mk.pool + rate * dt);
                 }
             }
@@ -802,6 +871,13 @@ export const Market = (() => {
         cashOutValue,
         canCashOut,
         cashOut,
+        /* market gates + cash-out multiplier */
+        peakLevelOf,
+        cashoutMultiplierOf,
+        cashoutTarget,
+        cashoutMultCost,
+        canBuyCashoutMult,
+        setCashoutMultiplier,
         /* reset */
         resetAmount,
         canReset,

@@ -1072,3 +1072,53 @@ body {
 .cashout-panel.fired .cashout-panel-reward {
     text-shadow: 0 0 10px rgba(77, 255, 166, 0.7);
 }
+
+/* ============================================================
+   Cash-out multiplier toggle
+   ============================================================ */
+
+.cashout-mult-toggle {
+    display: inline-flex;
+    gap: 3px;
+}
+.cashout-mult-btn {
+    padding: 3px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: rgba(63, 233, 255, 0.04);
+    color: var(--dim);
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.02em;
+    min-width: 28px;
+}
+.cashout-mult-btn:active {
+    transform: scale(0.95);
+}
+.cashout-mult-btn.owned {
+    color: var(--dim);
+    border-color: rgba(63, 233, 255, 0.25);
+    background: rgba(63, 233, 255, 0.06);
+}
+.cashout-mult-btn.active {
+    background: rgba(63, 233, 255, 0.15);
+    border-color: rgba(63, 233, 255, 0.7);
+    color: var(--quanta);
+    box-shadow: 0 0 8px rgba(63, 233, 255, 0.2);
+}
+.cashout-mult-btn.locked {
+    opacity: 0.45;
+    color: var(--dim2);
+}
+.cashout-mult-btn.locked.can {
+    opacity: 0.85;
+    border-color: rgba(77, 255, 166, 0.5);
+    color: var(--good);
+    background: rgba(77, 255, 166, 0.05);
+}
+.cashout-mult-btn.locked.poor {
+    opacity: 0.35;
+}

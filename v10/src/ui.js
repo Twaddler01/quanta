@@ -108,7 +108,48 @@ export const UI = (() => {
             { className: "cashout-panel", id: "cashoutPanel" },
             [
                 div({ className: "cashout-panel-header" }, [
-                    span({ className: "cashout-panel-title" }, "CASH POOL")
+                    span({ className: "cashout-panel-title" }, "CASH POOL"),
+                    div({ className: "cashout-mult-toggle" }, [
+                        el(
+                            "button",
+                            {
+                                className: "cashout-mult-btn",
+                                id: "cashoutMultBtn1",
+                                onClick: () =>
+                                    actions.setCashoutMultiplier(
+                                        State.get().activeMarket,
+                                        1
+                                    )
+                            },
+                            "1×"
+                        ),
+                        el(
+                            "button",
+                            {
+                                className: "cashout-mult-btn",
+                                id: "cashoutMultBtn2",
+                                onClick: () =>
+                                    actions.setCashoutMultiplier(
+                                        State.get().activeMarket,
+                                        2
+                                    )
+                            },
+                            "2×"
+                        ),
+                        el(
+                            "button",
+                            {
+                                className: "cashout-mult-btn",
+                                id: "cashoutMultBtn3",
+                                onClick: () =>
+                                    actions.setCashoutMultiplier(
+                                        State.get().activeMarket,
+                                        3
+                                    )
+                            },
+                            "3×"
+                        )
+                    ])
                 ]),
                 div({ className: "cashout-bar" }, [
                     div({ className: "cashout-bar-fill", id: "cashoutBarFill" })
@@ -134,7 +175,7 @@ export const UI = (() => {
                         className: "cashout-panel-reward",
                         id: "cashoutPanelReward"
                     },
-                    "Previous: — · Next: —"
+                    "Previous: — · On fill: —"
                 )
             ]
         );
@@ -486,6 +527,7 @@ export const UI = (() => {
         upgradeSpeed: () => {},
         upgradeBroker: () => {},
         prestige: () => {},
+        setCashoutMultiplier: () => {},
         resetMarket: () => {},
         selectMarket: () => {},
         reset: () => {}
@@ -686,8 +728,21 @@ export const UI = (() => {
 
             if (!unlocked) {
                 ref.nameEl.textContent = "🔒 " + m.name;
-                ref.subEl.textContent =
-                    "unlock " + Format.num(m.unlockAt) + " Q";
+                const parts = [];
+                if (m.unlockPrevMarket) {
+                    const prevPeak = Market.peakLevelOf(m.unlockPrevMarket);
+                    if (prevPeak < m.unlockPrevLevel) {
+                        parts.push(
+                            Market.def(m.unlockPrevMarket).name +
+                                " L" +
+                                m.unlockPrevLevel
+                        );
+                    }
+                }
+                if (s.total < m.unlockAt) {
+                    parts.push(Format.num(m.unlockAt) + " Q");
+                }
+                ref.subEl.textContent = parts.join(" · ") || "locked";
             } else {
                 ref.nameEl.textContent = starPrefix + m.name;
                 const lp = Market.levelProgress(m.id);
@@ -706,7 +761,7 @@ export const UI = (() => {
         /* ============ Market status ============ */
         $("#statusShares").textContent = mk.shares;
 
-        const cap = Market.poolMax(id);
+        const cap = Market.cashoutTarget(id);
         const poolPct = cap > 0 ? (mk.pool / cap) * 100 : 0;
         const fullPct = Config.CASHOUT_FULL_THRESHOLD * 100;
 
@@ -856,8 +911,8 @@ export const UI = (() => {
         $("#sellAll").classList.toggle("poor", !canSell);
 
         /* cash pool panel */
-        const livePmax = Market.poolMax(id);
-        const capCp = mk.fillCap || livePmax;
+        const liveTarget = Market.cashoutTarget(id);
+        const capCp = mk.fillCap || liveTarget;
         const poolPctCp = capCp > 0 ? (mk.pool / capCp) * 100 : 0;
         const totalMultCp =
             Market.globalCashMult() *
@@ -865,6 +920,39 @@ export const UI = (() => {
             Market.starMult(id);
         const nextVal = capCp * totalMultCp;
         const prevVal = mk.lastCashOutValue || 0;
+
+        /* multiplier toggle state */
+        const activeMult = Market.cashoutMultiplierOf(id);
+        const maxMult = mk.maxCashoutMultiplier || 1;
+        const peakLvl = mk.peakLevel || 0;
+
+        for (const m of [1, 2, 3]) {
+            const btn = $("#cashoutMultBtn" + m);
+            btn.classList.toggle("active", m === activeMult);
+            btn.classList.toggle("owned", m <= maxMult && m !== activeMult);
+            btn.classList.toggle("locked", m > maxMult);
+            btn.classList.remove("poor", "can");
+
+            if (m > maxMult) {
+                const reqLevel =
+                    m === 2
+                        ? Config.CASHOUT_MULT_2X_LEVEL
+                        : Config.CASHOUT_MULT_3X_LEVEL;
+                const cost = Market.cashoutMultCost(id, m);
+                if (peakLvl < reqLevel) {
+                    btn.classList.add("poor");
+                    btn.title = "Requires peak LV" + reqLevel;
+                } else if (s.Q < cost) {
+                    btn.classList.add("poor");
+                    btn.title = Format.num(cost) + " Q";
+                } else {
+                    btn.classList.add("can");
+                    btn.title = "Unlock for " + Format.num(cost) + " Q";
+                }
+            } else {
+                btn.title = "";
+            }
+        }
 
         $("#cashoutBarFill").style.width = Math.min(100, poolPctCp) + "%";
         $("#cashoutPanelPct").textContent = Math.round(poolPctCp) + "%";
@@ -1055,7 +1143,7 @@ export const UI = (() => {
             const level = Market.levelOf(m.id);
             const lvPrefix = level > 0 ? "LV" + level + " " : "";
             const mk2 = s.markets[m.id];
-            const cap2 = Market.poolMax(m.id);
+            const cap2 = Market.cashoutTarget(m.id);
             const rate2 = Market.currentInterestRate(m.id);
             const lpRate = Market.levelPassiveRate(m.id);
             let info = Format.num(mk2.pool) + "/" + Format.num(cap2) + "q";

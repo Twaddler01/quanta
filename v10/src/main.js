@@ -45,7 +45,11 @@ window.QUANTA = {
                 poolMax: Market.poolMax(m.id),
                 cashOuts: s.markets[m.id].cashOutCount,
                 level: s.markets[m.id].level || 0,
+                peakLevel: s.markets[m.id].peakLevel || 0,
                 levelPct: Math.round(Market.levelProgress(m.id).pct),
+                maxCashoutMultiplier: s.markets[m.id].maxCashoutMultiplier || 1,
+                cashoutMultiplier: s.markets[m.id].cashoutMultiplier || 1,
+                cashoutTarget: Market.cashoutTarget(m.id),
                 speedLevel: s.markets[m.id].speedLevel || 0,
                 streak: s.markets[m.id].streak || 0,
                 streakTimeLeftMs: Market.streakTimeLeftMs(m.id),
@@ -111,15 +115,15 @@ window.QUANTA = {
     },
     autoFire: id => {
         const mid = id || State.get().activeMarket;
-        const cap = Market.poolMax(mid);
+        const cap = Market.cashoutTarget(mid);
         State.get().markets[mid].pool = cap;
         return "Pool at cap — auto-cash will fire next frame";
     },
     fillPool: id => {
         const mid = id || State.get().activeMarket;
-        State.get().markets[mid].pool = Market.poolMax(mid);
+        State.get().markets[mid].pool = Market.cashoutTarget(mid);
         UI.render();
-        return "Pool filled to " + Format.num(Market.poolMax(mid));
+        return "Pool filled to " + Format.num(Market.cashoutTarget(mid));
     },
     setSpeedLevel: (id, n) => {
         const mid = id || State.get().activeMarket;
@@ -155,6 +159,22 @@ window.QUANTA = {
             "Stars: ⭐×" + mk.stars + " · ×" + Market.starMult(mid).toFixed(2)
         );
     },
+    setPeak: (id, n) => {
+        const mid = id || State.get().activeMarket;
+        const mk = State.get().markets[mid];
+        mk.peakLevel = Math.max(0, n | 0);
+        UI.render();
+        return "Peak level: " + mk.peakLevel;
+    },
+    setMaxCashoutMult: (id, n) => {
+        const mid = id || State.get().activeMarket;
+        const mk = State.get().markets[mid];
+        mk.maxCashoutMultiplier = Math.max(1, Math.min(3, n | 0));
+        mk.cashoutMultiplier = mk.maxCashoutMultiplier;
+        mk.fillCap = 0;
+        UI.render();
+        return "Max cash-out mult: ×" + mk.maxCashoutMultiplier;
+    },
     setCashOuts: (id, n) => {
         const mid = id || State.get().activeMarket;
         const mk = State.get().markets[mid];
@@ -180,5 +200,5 @@ window.QUANTA = {
         Save.disable();
         Save.wipe();
         location.reload();
-    },
+    }
 };

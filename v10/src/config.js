@@ -88,6 +88,8 @@ export const Config = (() => {
             priceMult: 1.8,
             threshold: 2000,
             unlockAt: 5000,
+            unlockPrevMarket: "calm",
+            unlockPrevLevel: 3,
             wave: {
                 amp1: 0.28,
                 period1: 60,
@@ -104,6 +106,8 @@ export const Config = (() => {
             priceMult: 2.0,
             threshold: 4000,
             unlockAt: 50000,
+            unlockPrevMarket: "tidal",
+            unlockPrevLevel: 3,
             wave: {
                 amp1: 0.35,
                 period1: 110,
@@ -120,6 +124,8 @@ export const Config = (() => {
             priceMult: 3.0,
             threshold: 8000,
             unlockAt: 500000,
+            unlockPrevMarket: "vortex",
+            unlockPrevLevel: 3,
             wave: {
                 amp1: 0.4,
                 period1: 150,
@@ -136,6 +142,8 @@ export const Config = (() => {
             priceMult: 4.0,
             threshold: 12000,
             unlockAt: 5000000,
+            unlockPrevMarket: "chaos",
+            unlockPrevLevel: 3,
             wave: {
                 amp1: 0.45,
                 period1: 200,
@@ -152,6 +160,8 @@ export const Config = (() => {
             priceMult: 5.0,
             threshold: 16000,
             unlockAt: 50000000,
+            unlockPrevMarket: "abyss",
+            unlockPrevLevel: 3,
             wave: {
                 amp1: 0.5,
                 period1: 260,
@@ -260,6 +270,11 @@ export const Config = (() => {
         /* ---- Prestige (per-market reset for stars) ---- */
         PRESTIGE_LEVEL_MIN: 5,
         PRESTIGE_STAR_PER: 0.03,
+        
+        /* ---- Cash-out multiplier (2x / 3x bulk cash-outs) ---- */
+        CASHOUT_MULT_2X_LEVEL: 5,
+        CASHOUT_MULT_3X_LEVEL: 10,
+        CASHOUT_MULT_COST_BASE: 20000,
 
         /* ---- Global cash multiplier (all markets, based on total cash-outs) ---- */
         GLOBAL_CASH_REF: 20,
@@ -316,6 +331,9 @@ export const State = (() => {
             stars: 0,
             lastCashOutValue: 0,
             fillCap: 0,
+            peakLevel: 0,
+            maxCashoutMultiplier: 1,
+            cashoutMultiplier: 1
         };
     }
 
@@ -446,6 +464,20 @@ export const Save = (() => {
                 stars: Math.max(0, Math.floor(num(saved.stars))),
                 lastCashOutValue: Math.max(0, num(saved.lastCashOutValue)),
                 fillCap: Math.max(0, num(saved.fillCap)),
+                peakLevel: Math.max(
+                    num(saved.peakLevel),
+                    cashOutCount // derived level as migration fallback
+                        ? Config.computeLevel(cashOutCount)
+                        : 0
+                ),
+                maxCashoutMultiplier: Math.max(
+                    1,
+                    Math.min(3, Math.floor(num(saved.maxCashoutMultiplier)) || 1)
+                ),
+                cashoutMultiplier: Math.max(
+                    1,
+                    Math.min(3, Math.floor(num(saved.cashoutMultiplier)) || 1)
+                )
             };
         }
 
@@ -492,9 +524,14 @@ export const Save = (() => {
 
         const s = State.get();
         const activeDef = Config.MARKETS.find(m => m.id === s.activeMarket);
-        if (!activeDef || s.total < activeDef.unlockAt) {
-            s.activeMarket = "calm";
+        let activeValid = !!activeDef && s.total >= activeDef.unlockAt;
+        if (activeValid && activeDef.unlockPrevMarket) {
+            const prev = s.markets[activeDef.unlockPrevMarket];
+            if ((prev?.peakLevel || 0) < activeDef.unlockPrevLevel) {
+                activeValid = false;
+            }
         }
+        if (!activeValid) s.activeMarket = "calm";
         return true;
     }
 

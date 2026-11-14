@@ -176,6 +176,42 @@ export const Game = (() => {
         }
     }
 
+    function setCashoutMultiplier(id, mult) {
+        const s = State.get();
+        const mk = s.markets[id];
+        if (!mk) return;
+        const prevMax = mk.maxCashoutMultiplier || 1;
+        const ok = Market.setCashoutMultiplier(id, mult);
+        if (ok) {
+            const nowMax = mk.maxCashoutMultiplier || 1;
+            if (nowMax > prevMax) {
+                UI.toast(
+                    "Unlocked ×" + nowMax + " cash-out on " + Market.def(id).name
+                );
+            }
+            Save.write();
+            UI.render();
+        } else {
+            const reqLevel =
+                mult === 2
+                    ? Config.CASHOUT_MULT_2X_LEVEL
+                    : Config.CASHOUT_MULT_3X_LEVEL;
+            if (
+                mult > (mk.maxCashoutMultiplier || 1) &&
+                (mk.peakLevel || 0) < reqLevel
+            ) {
+                UI.toast("Requires peak LV" + reqLevel + " on this market");
+            } else if (
+                mult > (mk.maxCashoutMultiplier || 1) &&
+                s.Q < Market.cashoutMultCost(id, mult)
+            ) {
+                UI.toast("Need " + Format.num(Market.cashoutMultCost(id, mult)) + " Q");
+            } else if (mk.pool > 0 || mk.fillCap > 0) {
+                UI.toast("Wait for current fill to finish");
+            }
+        }
+    }
+    
     function prestige(id) {
         const pv = Market.prestigePreview(id);
         if (!pv.canPrestige) {
@@ -258,7 +294,7 @@ export const Game = (() => {
         let biggest = 0;
         for (const m of Config.MARKETS) {
             const mk = s.markets[m.id];
-            const cap = mk.fillCap || Market.poolMax(m.id);
+            const cap = mk.fillCap || Market.cashoutTarget(m.id);
             if (cap > 0 && mk.pool >= cap) {
                 const r = Market.cashOut(m.id);
                 if (r.ok) {
@@ -314,6 +350,7 @@ export const Game = (() => {
             upgradePassiveYield,
             upgradeReaction,
             upgradeSpeed,
+            setCashoutMultiplier,
             upgradeBroker,
             prestige,
             resetMarket,
