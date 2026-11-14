@@ -258,7 +258,7 @@ export const Game = (() => {
         let biggest = 0;
         for (const m of Config.MARKETS) {
             const mk = s.markets[m.id];
-            const cap = Market.poolMax(m.id);
+            const cap = mk.fillCap || Market.poolMax(m.id);
             if (cap > 0 && mk.pool >= cap) {
                 const r = Market.cashOut(m.id);
                 if (r.ok) {

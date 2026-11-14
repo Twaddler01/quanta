@@ -836,8 +836,9 @@ export const UI = (() => {
         const sellBoostedP = Market.sellPriceBoosted(id, t);
         const streakLive =
             (mk.streak || 0) > 0 && Market.streakTimeLeftMs(id) > 0;
-        const sellDisplay = streakLive ? sellBoostedP : sellP;
-        const sellSuffix = streakLive ? " ✦" : "";
+        const useBoosted = streakLive && sellBoostedP > sellP + 0.001;
+        const sellDisplay = useBoosted ? sellBoostedP : sellP;
+        const sellSuffix = useBoosted ? " ✦" : "";
 
         $("#sell1Amount").textContent =
             "Ⓠ " + Format.num(sellDisplay) + sellSuffix;

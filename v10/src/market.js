@@ -193,8 +193,16 @@ export const Market = (() => {
 
     const buyPrice = (id, t) => naturalPrice(id, t) * (1 + brokerFee());
     const sellPrice = id => t => naturalPrice(id, t);
-    const sellPriceBoosted = (id, t) =>
-        naturalPrice(id, t) * (1 + streakBonus(id));
+    const sellPriceBoosted = (id, t) => {
+        const mk = State.get().markets[id];
+        const avgCost = mk.holding > 0 ? mk.costBasis / mk.holding : 0;
+        const baseP = naturalPrice(id, t);
+        if (avgCost > 0 && baseP > avgCost) {
+            const amp = (1 + streakBonus(id)) * starMult(id);
+            return avgCost + (baseP - avgCost) * amp;
+        }
+        return baseP;
+    };
 
     /* ---- multipliers ---- */
 
@@ -391,19 +399,22 @@ export const Market = (() => {
         const baseP = priceOverride ?? sellPrice(id)(t);
         const streakMult = 1 + streakBonus(id);
         const starM = starMult(id);
-        const price = baseP * streakMult * starM;
-        const gain = n * price;
         const avgCost = mk.holding > 0 ? mk.costBasis / mk.holding : 0;
-        const profit = n * (price - avgCost);
         const baseProfit = n * (baseP - avgCost);
+
+        /* Amplify PROFIT, not PRICE. Losses stay raw — streak/star only
+       multiply genuine gains, so they can't create wins from losses. */
+        const amp = baseProfit > 0 ? streakMult * starM : 1;
+        const profit = baseProfit * amp;
+        const gain = n * avgCost + profit;
+        const price = n > 0 ? gain / n : baseP;
 
         mk.q += gain;
         mk.holding -= n;
         mk.costBasis -= avgCost * n;
         if (mk.holding === 0) mk.costBasis = 0;
 
-        /* ALWAYS reset the interest window on any sell.
-       A losing trade should not keep earning interest from a prior win. */
+        /* Interest uses raw profit so streak/star don't inflate it */
         mk.recentProfit = Math.max(0, baseProfit);
         mk.interestExpiresAt =
             mk.recentProfit > 0
@@ -412,7 +423,8 @@ export const Market = (() => {
 
         if (profit > 0) {
             mk.lifetimeProfit += profit;
-            const poolCap = poolMax(id);
+            const liveCap = poolMax(id);
+            const capForFill = mk.fillCap || liveCap;
             const lvl = levelOf(id);
             const capPct = Math.min(
                 Config.POOL_FILL_CAP_MAX,
@@ -420,10 +432,10 @@ export const Market = (() => {
                     lvl * Config.POOL_FILL_CAP_PER_LEVEL) *
                     Math.sqrt(starM)
             );
-            const maxDelta = poolCap * capPct;
+            const maxDelta = capForFill * capPct;
             const delta = Math.min(profit * Config.POOL_ROUTE, maxDelta);
-            mk.pool = Math.min(poolCap, mk.pool + delta);
-            if (mk.pool > 0 && !mk.fillCap) mk.fillCap = poolCap;
+            mk.pool = Math.min(capForFill, mk.pool + delta);
+            if (mk.pool > 0 && !mk.fillCap) mk.fillCap = liveCap;
 
             const nowMs = Date.now();
             const withinWindow =
@@ -449,8 +461,8 @@ export const Market = (() => {
 
     function canCashOut(id) {
         const mk = State.get().markets[id];
+        const cap = mk.fillCap || poolMax(id); // ← fillCap first
         if (mk.cashOutCooldown > 0) {
-            const cap = poolMax(id);
             return {
                 ok: false,
                 reason: "cooldown",
@@ -458,7 +470,6 @@ export const Market = (() => {
                 pct: cap > 0 ? (mk.pool / cap) * 100 : 0
             };
         }
-        const cap = poolMax(id);
         const threshold = cap * Config.CASHOUT_FULL_THRESHOLD;
         if (mk.pool < threshold) {
             return {
@@ -729,10 +740,8 @@ export const Market = (() => {
                         Config.INTEREST_COEF *
                         interestBoostMult() *
                         Math.sqrt(tLeft);
-
-                    const cap = poolMax(m.id);
+                    const cap = mk.fillCap || poolMax(m.id);
                     mk.pool = Math.min(cap, mk.pool + rate * dt);
-                    if (mk.pool > 0 && !mk.fillCap) mk.fillCap = poolMax(m.id);
                 }
             }
         }
